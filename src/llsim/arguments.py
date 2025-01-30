@@ -89,15 +89,23 @@ NODE_SIM = cbrkit.sim.transpose_value(
         default=cbrkit.sim.generic.static(0.0),
     )
 )
-GRAPH_SIM = cbrkit.sim.graphs.astar.build(
-    past_cost_func=cbrkit.sim.graphs.astar.g1(NODE_SIM),
-    future_cost_func=cbrkit.sim.graphs.astar.h3(NODE_SIM),
-    selection_func=cbrkit.sim.graphs.astar.select3(
-        cbrkit.sim.graphs.astar.h3(NODE_SIM)
-    ),
-    init_func=cbrkit.sim.graphs.astar.init2(),
-    queue_limit=1,
-)
+
+
+def GRAPH_SIM_FACTORY() -> cbrkit.typing.AnySimFunc[
+    cbrkit.sim.graphs.Graph[str, NodeData, EdgeData, GraphData],
+    cbrkit.sim.graphs.GraphSim[str],
+]:
+    return cbrkit.sim.graphs.astar.build(
+        past_cost_func=cbrkit.sim.graphs.astar.g1(NODE_SIM),
+        future_cost_func=cbrkit.sim.graphs.astar.h3(NODE_SIM),
+        selection_func=cbrkit.sim.graphs.astar.select3(
+            cbrkit.sim.graphs.astar.h3(NODE_SIM)
+        ),
+        init_func=cbrkit.sim.graphs.astar.init2[str, NodeData, EdgeData, GraphData](),
+        queue_limit=1,
+    )
+
+
 GRAPH_MAC = cbrkit.retrieval.build(cbrkit.sim.transpose(SEMANTIC_SIM, graph2text))
 GRAPH_FAC_PRECOMPUTE = cbrkit.retrieval.build(
     cbrkit.sim.graphs.precompute(
@@ -109,10 +117,7 @@ GRAPH_FAC_PRECOMPUTE = cbrkit.retrieval.build(
         )
     )
 )
-
-
-def GRAPH_FAC_FACTORY():
-    return cbrkit.retrieval.build(GRAPH_SIM, multiprocessing=True)
+GRAPH_FAC = cbrkit.retrieval.build(GRAPH_SIM_FACTORY, multiprocessing=True)
 
 
 RETRIEVER: cbrkit.typing.MaybeFactories[
@@ -121,4 +126,4 @@ RETRIEVER: cbrkit.typing.MaybeFactories[
         cbrkit.sim.graphs.Graph[str, NodeData, EdgeData, GraphData],
         float | cbrkit.sim.graphs.GraphSim[str],
     ]
-] = [GRAPH_FAC_PRECOMPUTE, GRAPH_FAC_FACTORY]
+] = [GRAPH_FAC_PRECOMPUTE, GRAPH_FAC]

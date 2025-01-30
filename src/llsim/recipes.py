@@ -66,7 +66,7 @@ NODE_SIM: BatchSimFunc[
         )
     )
 )
-GRAPH_SIM: cbrkit.typing.BatchSimFunc[
+GRAPH_SIM: cbrkit.typing.AnySimFunc[
     cbrkit.sim.graphs.Graph[str, NodeData, None, None],
     cbrkit.sim.graphs.GraphSim[str],
 ] = cbrkit.sim.graphs.astar.build(
@@ -75,11 +75,11 @@ GRAPH_SIM: cbrkit.typing.BatchSimFunc[
     selection_func=cbrkit.sim.graphs.astar.select3(
         cbrkit.sim.graphs.astar.h3(NODE_SIM)
     ),
-    init_func=cbrkit.sim.graphs.astar.init2(),
+    init_func=cbrkit.sim.graphs.astar.init2[str, NodeData, None, None](),
     queue_limit=1,
 )
 
-RETRIEVER: cbrkit.typing.RetrieverFunc[
+Retriever: cbrkit.typing.RetrieverFunc[
     str,
     cbrkit.sim.graphs.Graph[str, NodeData, None, None],
     cbrkit.sim.graphs.GraphSim[str],

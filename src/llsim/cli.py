@@ -6,10 +6,6 @@ import cbrkit
 import orjson
 from typer import Option, Typer
 
-from llsim import cars
-
-from . import arguments, recipes
-
 app = Typer(pretty_exceptions_enable=False)
 
 
@@ -24,34 +20,41 @@ def dump_result(result: cbrkit.retrieval.Result, output_path: Path):
 
 
 @app.command()
-def retrieve_arguments(
+def retrieve_dir(
     cases_path: Path,
     queries_path: Path,
     output_path: Path,
+    retriever: str,
+    loader: str,
     cases_pattern: str = "*.json",
     queries_pattern: str = "*.json",
 ):
-    cases = {path.stem: arguments.load(path) for path in cases_path.glob(cases_pattern)}
-    queries = {
-        path.stem: arguments.load(path) for path in queries_path.glob(queries_pattern)
-    }
-    result = cbrkit.retrieval.apply_queries(cases, queries, arguments.RETRIEVER)
+    _retriever = cbrkit.helpers.load_callable(retriever)
+    _loader = cbrkit.helpers.load_callable(loader)
+
+    cases = {path.stem: _loader(path) for path in cases_path.glob(cases_pattern)}
+    queries = {path.stem: _loader(path) for path in queries_path.glob(queries_pattern)}
+    result = cbrkit.retrieval.apply_queries(cases, queries, _retriever)
+
     dump_result(result, output_path)
 
 
 @app.command()
-def retrieve_recipes(input_path: Path, output_path: Path):
-    cases = recipes.load(input_path)
-    queries = cases
-    result = cbrkit.retrieval.apply_queries(cases, queries, recipes.RETRIEVER)
-    dump_result(result, output_path)
+def retrieve_file(
+    cases_path: Path,
+    queries_path: Path,
+    output_path: Path,
+    retriever: str,
+    loader: str,
+):
+    _retriever = cbrkit.helpers.load_callable(retriever)
+    _loader = cbrkit.helpers.load_callable(loader)
 
+    cases = _loader(cases_path)
+    queries = _loader(queries_path)
+    # TODO: change this again to include all queries!
+    result = cbrkit.retrieval.apply_queries(cases, {"W40": queries["W40"]}, _retriever)
 
-@app.command()
-def retrieve_cars(input_path: Path, output_path: Path):
-    cases = cars.load(input_path)
-    queries = cases
-    result = cbrkit.retrieval.apply_queries(cases, queries, cars.RETRIEVER)
     dump_result(result, output_path)
 
 
@@ -60,6 +63,8 @@ def evaluate_run(
     result_path: Path,
     baseline_path: Path,
     k: Annotated[list[int], Option(default_factory=list)],
+    max_qrel: int | None = None,
+    min_qrel: int = 0,
 ):
     with baseline_path.open("rb") as fp:
         baseline: cbrkit.retrieval.Result = pickle.load(fp)
@@ -68,7 +73,7 @@ def evaluate_run(
         result: cbrkit.retrieval.Result = pickle.load(fp)
 
     metrics = cbrkit.eval.retrieval_step(
-        cbrkit.eval.retrieval_step_to_qrels(baseline.final_step),
+        cbrkit.eval.retrieval_step_to_qrels(baseline.final_step, max_qrel, min_qrel),
         result.final_step,
         metrics=cbrkit.eval.generate_metrics(ks=k),
     )

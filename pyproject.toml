@@ -8,6 +8,7 @@ dependencies = [
     "cbrkit[graphs,llm,transformers,nlp,eval]>=0,<1",
     "arguebuf>=2,<3",
     "typer>=0,<1",
+    "httpx[http2]>=0.27.2",
 ]
 
 [project.scripts]
