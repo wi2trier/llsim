@@ -109,23 +109,24 @@ POOLING_PROMPT = cbrkit.synthesis.prompts.pooling(
     "Please combine the partial results and create missing transitive preferences to get the final ranking. "
     "This will later be used to calculate the PageRank scores, so a complete matrix is required. "
 )
-POOLING_FUNC = cbrkit.synthesis.pooling(
-    openai_provider("gpt-4o-2024-11-20"), POOLING_PROMPT
-)
 
 retriever_overlap = Retriever(
     cbrkit.synthesis.chunks(
         cbrkit.synthesis.build(openai_provider("gpt-4o-mini-2024-07-18"), PROMPT),
-        POOLING_FUNC,
+        cbrkit.synthesis.pooling(openai_provider("o3-mini-2025-01-31"), POOLING_PROMPT),
         size=1,
         overlap=1,
     )
 )
 
-retriever_complete = Retriever(
+retriever_chunks = Retriever(
     cbrkit.synthesis.chunks(
         cbrkit.synthesis.build(openai_provider("gpt-4o-mini-2024-07-18"), PROMPT),
-        POOLING_FUNC,
+        cbrkit.synthesis.pooling(openai_provider("o3-mini-2025-01-31"), POOLING_PROMPT),
         size=20,
     )
+)
+
+retriever_full = Retriever(
+    cbrkit.synthesis.build(openai_provider("o3-mini-2025-01-31"), PROMPT)
 )
