@@ -98,7 +98,7 @@ def openai_provider(model: str):
 
 
 PROMPT = cbrkit.synthesis.prompts.default(
-    "Given a list of documents, provide preferences between them. "
+    "Given a list of documents and a query, generate preferences between the documents with respect to the query. "
     "Only include documents IDs that were provided in the list. "
     "The IDs are given as markdown headings. "
     "Do not include attributes or nodes from invididual documents in the preferences. "
