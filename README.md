@@ -60,3 +60,14 @@ The similarity of the cases is calculated by the weighted average of the similar
 | drive        | String               | Levenshtein        | 1      |
 | type         | String               | Levenshtein        | 1      |
 | paint_color  | String               | Levenshtein        | 1      |
+
+## Baseline
+
+```shell
+# RECIPES
+uv run llsim retrieve-file data/cases/recipes.json data/cases/recipes.json data/output/recipes/baseline llsim.recipes.RETRIEVER llsim.recipes:load
+# CARS
+uv run llsim retrieve-file data/cases/cars.json data/cases/cars.json data/output/cars/baseline llsim.cars.RETRIEVER llsim.cars:load
+# ARGUMENTS
+uv run llsim retrieve-dir data/cases/arguments data/queries/arguments data/output/arguments/baseline llsim.arguments.RETRIEVER llsim.arguments:load
+```

@@ -84,6 +84,6 @@ GRAPH_SIM: cbrkit.typing.AnySimFunc[Graph[str, NodeData, None, None], GraphSim[s
     )
 )
 
-Retriever: cbrkit.typing.RetrieverFunc[
+RETRIEVER: cbrkit.typing.RetrieverFunc[
     str, Graph[str, NodeData, None, None], GraphSim[str]
-] = cbrkit.retrieval.build(GRAPH_SIM, multiprocessing=True)
+] = cbrkit.retrieval.build(GRAPH_SIM, multiprocessing=True, chunksize=1)

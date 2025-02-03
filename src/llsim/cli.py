@@ -43,14 +43,18 @@ def retrieve_file(
     output_path: Path,
     retriever: str,
     loader: str,
+    query_name: Annotated[list[str], Option(default_factory=list)],
 ):
     _retriever = cbrkit.helpers.load_callable(retriever)
     _loader = cbrkit.helpers.load_callable(loader)
 
     cases = _loader(cases_path)
     queries = _loader(queries_path)
-    # TODO: change this again to include all queries!
-    result = cbrkit.retrieval.apply_queries(cases, {"W40": queries["W40"]}, _retriever)
+
+    if query_name:
+        queries = {key: queries[key] for key in query_name}
+
+    result = cbrkit.retrieval.apply_queries(cases, queries, _retriever)
 
     dump_result(result, output_path)
 
