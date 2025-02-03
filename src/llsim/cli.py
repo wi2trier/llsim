@@ -13,10 +13,7 @@ def dump_result(result: cbrkit.retrieval.Result, output_path: Path):
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with output_path.with_suffix(".json").open("wb") as fp:
-        fp.write(orjson.dumps(result.as_dict()))
-
-    with output_path.with_suffix(".pkl").open("wb") as fp:
-        pickle.dump(result, fp)
+        fp.write(orjson.dumps(result.model_dump()))
 
 
 @app.command()
@@ -67,15 +64,15 @@ def evaluate_run(
     min_qrel: int = 0,
 ):
     with baseline_path.open("rb") as fp:
-        baseline: cbrkit.retrieval.Result = pickle.load(fp)
+        baseline = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
 
     with result_path.open("rb") as fp:
-        result: cbrkit.retrieval.Result = pickle.load(fp)
+        result = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
 
     metrics = cbrkit.eval.retrieval_step(
         cbrkit.eval.retrieval_step_to_qrels(baseline.final_step, max_qrel, min_qrel),
         result.final_step,
-        metrics=cbrkit.eval.generate_metrics(ks=k),
+        metrics=cbrkit.eval.generate_metrics(ks=k + [None]),
     )
 
     for key, value in metrics.items():

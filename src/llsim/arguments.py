@@ -4,11 +4,10 @@ from typing import Any
 
 import arguebuf
 import cbrkit
-from cbrkit.sim.graphs.model import (
+from cbrkit.model.graph import (
     Graph,
     SerializedEdge,
     SerializedGraph,
-    SerializedNode,
 )
 
 
@@ -30,13 +29,11 @@ def unpack_scheme(node: SchemeData) -> arguebuf.Scheme | None:
 def load(path: Path) -> Graph[str, NodeData, EdgeData, GraphData]:
     g = arguebuf.load.file(path)
 
-    atom_nodes: dict[str, SerializedNode[NodeData]] = {
-        key: SerializedNode(value=value.plain_text)
-        for key, value in g.atom_nodes.items()
+    atom_nodes: dict[str, NodeData] = {
+        key: value.plain_text for key, value in g.atom_nodes.items()
     }
-    scheme_nodes: dict[str, SerializedNode[NodeData]] = {
-        key: SerializedNode(value=SchemeData(value.scheme))
-        for key, value in g.scheme_nodes.items()
+    scheme_nodes: dict[str, NodeData] = {
+        key: SchemeData(value.scheme) for key, value in g.scheme_nodes.items()
     }
     edges: dict[str, SerializedEdge[str, EdgeData]] = {
         key: SerializedEdge(source=value.source.id, target=value.target.id, value=None)
@@ -80,19 +77,17 @@ EMBED_FUNC = cbrkit.sim.embed.cache(
 )
 SEMANTIC_SIM = cbrkit.sim.embed.build(EMBED_FUNC, cbrkit.sim.embed.cosine())
 SCHEME_SIM = cbrkit.sim.transpose(cbrkit.sim.generic.type_equality(), unpack_scheme)
-NODE_SIM = cbrkit.sim.transpose_value(
-    cbrkit.sim.type_table(
-        {
-            str: SEMANTIC_SIM,
-            SchemeData: SCHEME_SIM,
-        },
-        default=cbrkit.sim.generic.static(0.0),
-    )
+NODE_SIM = cbrkit.sim.type_table(
+    {
+        str: SEMANTIC_SIM,
+        SchemeData: SCHEME_SIM,
+    },
+    default=cbrkit.sim.generic.static(0.0),
 )
 
 
 def GRAPH_SIM_FACTORY() -> cbrkit.typing.AnySimFunc[
-    cbrkit.sim.graphs.Graph[str, NodeData, EdgeData, GraphData],
+    Graph[str, NodeData, EdgeData, GraphData],
     cbrkit.sim.graphs.GraphSim[str],
 ]:
     return cbrkit.sim.graphs.astar.build(
@@ -109,11 +104,9 @@ def GRAPH_SIM_FACTORY() -> cbrkit.typing.AnySimFunc[
 GRAPH_MAC = cbrkit.retrieval.build(cbrkit.sim.transpose(SEMANTIC_SIM, graph2text))
 GRAPH_FAC_PRECOMPUTE = cbrkit.retrieval.build(
     cbrkit.sim.graphs.precompute(
-        cbrkit.sim.transpose_value(
-            cbrkit.sim.type_table(
-                {str: SEMANTIC_SIM},
-                default=cbrkit.sim.generic.static(0.0),
-            )
+        cbrkit.sim.type_table(
+            {str: SEMANTIC_SIM},
+            default=cbrkit.sim.generic.static(0.0),
         )
     )
 )
@@ -123,7 +116,7 @@ GRAPH_FAC = cbrkit.retrieval.build(GRAPH_SIM_FACTORY, multiprocessing=True)
 RETRIEVER: cbrkit.typing.MaybeFactories[
     cbrkit.typing.RetrieverFunc[
         str,
-        cbrkit.sim.graphs.Graph[str, NodeData, EdgeData, GraphData],
+        Graph[str, NodeData, EdgeData, GraphData],
         float | cbrkit.sim.graphs.GraphSim[str],
     ]
 ] = [GRAPH_FAC_PRECOMPUTE, GRAPH_FAC]
