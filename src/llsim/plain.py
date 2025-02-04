@@ -1,25 +1,36 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Annotated
 
 import cbrkit
 import httpx
 from openai import AsyncOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
-class SimModel[K](BaseModel):
-    similarities: dict[K, float]
+class SimModelEntry(BaseModel):
+    id: Annotated[str, Field(description="The ID of the document")]
+    similarity: Annotated[
+        float,
+        Field(
+            description="The similarity of the document to the query. Must be between 0.0 and 1.0"
+        ),
+    ]
 
 
-class RankModel[K](BaseModel):
-    ranking: list[K]
+class SimModel(BaseModel):
+    similarities: list[SimModelEntry]
 
 
-def from_sim_model[K](response: SimModel[K]) -> dict[K, float]:
-    return response.similarities
+class RankModel(BaseModel):
+    ranking: list[str]
 
 
-def from_rank_model[K](response: RankModel[K]) -> dict[K, float]:
+def from_sim_model[K](response: SimModel) -> dict[str, float]:
+    return {entry.id: entry.similarity for entry in response.similarities}
+
+
+def from_rank_model[K](response: RankModel) -> dict[str, float]:
     return {
         key: 1.0 - i / len(response.ranking) for i, key in enumerate(response.ranking)
     }
@@ -41,7 +52,7 @@ class Retriever[R: BaseModel, V]:
 
 PROMPT = cbrkit.synthesis.prompts.default(
     "Given a list of documents and a query, generate a ranking of the documents with respect to the query. "
-    "Only include documents IDs that were provided in the list. "
+    "It should include all the documents in the list and must not include IDs that were not provided. "
     "The IDs are given as markdown headings. "
 )
 
@@ -68,11 +79,11 @@ def Synthesizer[T: BaseModel](
 
 
 SIM_RETRIEVER = Retriever(
-    synthesis_func=Synthesizer("gpt-4o-mini-2024-07-18", SimModel),
+    synthesis_func=Synthesizer("o3-mini-2025-01-31", SimModel),
     conversion_func=from_sim_model,
 )
 
 RANK_RETRIEVER = Retriever(
-    synthesis_func=Synthesizer("gpt-4o-mini-2024-07-18", RankModel),
+    synthesis_func=Synthesizer("o3-mini-2025-01-31", RankModel),
     conversion_func=from_rank_model,
 )
