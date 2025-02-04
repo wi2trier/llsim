@@ -1,6 +1,6 @@
-import pickle
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import cbrkit
 import orjson
@@ -10,73 +10,67 @@ from typer import Option, Typer
 app = Typer(pretty_exceptions_enable=False)
 
 
-def dump_result(result: cbrkit.retrieval.Result, output_path: Path):
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+def load_cases(
+    loader: Callable[[Path], Any], path: Path, pattern: str | None
+) -> dict[str, Any]:
+    if pattern is None and path.is_file():
+        return loader(path)
+    elif pattern is not None and path.is_dir():
+        return {path.stem: loader(path) for path in path.glob(pattern)}
 
-    with output_path.with_suffix(".json").open("wb") as fp:
+    raise ValueError("Invalid path or pattern")
+
+
+@app.command()
+def retrieve(
+    cases: Annotated[Path, Option()],
+    out: Annotated[Path, Option()],
+    retriever: Annotated[str, Option()],
+    loader: Annotated[str, Option()],
+    query_name: Annotated[list[str], Option(default_factory=list)],
+    queries: Annotated[Path | None, Option()] = None,
+    cases_pattern: str | None = None,
+    queries_pattern: str | None = None,
+):
+    _retriever = cbrkit.helpers.load_callable(retriever)
+    _loader = cbrkit.helpers.load_callable(loader)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    if queries is None:
+        queries = cases
+
+    if queries_pattern is None:
+        queries_pattern = cases_pattern
+
+    _cases = load_cases(_loader, cases, cases_pattern)
+    _queries = load_cases(_loader, queries, queries_pattern)
+
+    if query_name:
+        _queries = {key: _queries[key] for key in query_name}
+
+    result = cbrkit.retrieval.apply_queries(_cases, _queries, _retriever)
+
+    with out.open("wb") as fp:
         fp.write(orjson.dumps(result.model_dump()))
 
 
 @app.command()
-def retrieve_dir(
-    cases_path: Path,
-    queries_path: Path,
-    output_path: Path,
-    retriever: str,
-    loader: str,
-    cases_pattern: str = "*.json",
-    queries_pattern: str = "*.json",
-):
-    _retriever = cbrkit.helpers.load_callable(retriever)
-    _loader = cbrkit.helpers.load_callable(loader)
-
-    cases = {path.stem: _loader(path) for path in cases_path.glob(cases_pattern)}
-    queries = {path.stem: _loader(path) for path in queries_path.glob(queries_pattern)}
-    result = cbrkit.retrieval.apply_queries(cases, queries, _retriever)
-
-    dump_result(result, output_path)
-
-
-@app.command()
-def retrieve_file(
-    cases_path: Path,
-    queries_path: Path,
-    output_path: Path,
-    retriever: str,
-    loader: str,
-    query_name: Annotated[list[str], Option(default_factory=list)],
-):
-    _retriever = cbrkit.helpers.load_callable(retriever)
-    _loader = cbrkit.helpers.load_callable(loader)
-
-    cases = _loader(cases_path)
-    queries = _loader(queries_path)
-
-    if query_name:
-        queries = {key: queries[key] for key in query_name}
-
-    result = cbrkit.retrieval.apply_queries(cases, queries, _retriever)
-
-    dump_result(result, output_path)
-
-
-@app.command()
 def evaluate_run(
-    result_path: Path,
-    baseline_path: Path,
+    result: Annotated[Path, Option()],
+    baseline: Annotated[Path, Option()],
     k: Annotated[list[int], Option(default_factory=list)],
     max_qrel: int | None = None,
     min_qrel: int = 0,
 ):
-    with baseline_path.open("rb") as fp:
-        baseline = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
+    with baseline.open("rb") as fp:
+        _baseline = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
 
-    with result_path.open("rb") as fp:
-        result = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
+    with result.open("rb") as fp:
+        _result = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
 
     metrics = cbrkit.eval.retrieval_step(
-        cbrkit.eval.retrieval_step_to_qrels(baseline.final_step, max_qrel, min_qrel),
-        result.final_step,
+        cbrkit.eval.retrieval_step_to_qrels(_baseline.final_step, max_qrel, min_qrel),
+        _result.final_step,
         metrics=cbrkit.eval.generate_metrics(ks=k + [None]),
     )
 
@@ -85,10 +79,10 @@ def evaluate_run(
 
     # compute mean average error between similarities from llm and benchmark
     baseline_scores = {
-        key: entry.similarities for key, entry in baseline.final_step.queries.items()
+        key: entry.similarities for key, entry in _baseline.final_step.queries.items()
     }
     result_scores = {
-        key: entry.similarities for key, entry in result.final_step.queries.items()
+        key: entry.similarities for key, entry in _result.final_step.queries.items()
     }
 
     mse = cbrkit.eval.compute_score_metric(
@@ -102,20 +96,25 @@ def evaluate_run(
 
 @app.command()
 def evaluate_qrels(
-    result_path: Path,
+    result: Annotated[Path, Option()],
+    queries: Annotated[Path, Option()],
+    loader: Annotated[str, Option()],
     k: Annotated[list[int], Option(default_factory=list)],
+    queries_pattern: str | None = None,
 ):
-    with result_path.open("rb") as fp:
-        result: cbrkit.retrieval.Result = pickle.load(fp)
+    with result.open("rb") as fp:
+        _result = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
+
+    _loader = cbrkit.helpers.load_callable(loader)
+    _queries = load_cases(_loader, queries, queries_pattern)
 
     qrels: dict[str, dict[str, int]] = {
-        key: entry.query.value["qrels"]
-        for key, entry in result.first_step.queries.items()
+        key: query.value["qrels"] for key, query in _queries.items()
     }
 
     metrics = cbrkit.eval.retrieval_step(
         qrels,
-        result.final_step,
+        _result.final_step,
         metrics=cbrkit.eval.generate_metrics(ks=k),
     )
 
