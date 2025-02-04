@@ -4,7 +4,7 @@ from typing import Annotated, Any
 
 import cbrkit
 import orjson
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from typer import Option, Typer
 
 app = Typer(pretty_exceptions_enable=False)
@@ -85,13 +85,17 @@ def evaluate_run(
         key: entry.similarities for key, entry in _result.final_step.queries.items()
     }
 
-    mse = cbrkit.eval.compute_score_metric(
+    mse = cbrkit.eval.compute_score_metrics(
         baseline_scores,
         result_scores,
-        mean_squared_error,
+        {
+            "mse": mean_squared_error,
+            "mae": mean_absolute_error,
+        },
     )
 
-    print(f"MSE: {mse:.3f}")
+    for key, value in mse.items():
+        print(f"{key}: {value:.3f}")
 
 
 @app.command()
