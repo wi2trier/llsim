@@ -68,14 +68,14 @@ The similarity of the cases is calculated by the weighted average of the similar
 uv run llsim retrieve \
   --cases data/cases/recipes.json \
   --loader llsim.recipes:load \
-  --retriever llsim.recipes.RETRIEVER \
+  --retriever llsim.recipes:RETRIEVER \
   --out data/output/recipes/baseline.json
 
 # CARS
 uv run llsim retrieve \
   --cases data/cases/cars.json \
   --loader llsim.cars:load \
-  --retriever llsim.cars.RETRIEVER \
+  --retriever llsim.cars:RETRIEVER \
   --out data/output/cars/baseline.json
 
 # ARGUMENTS
@@ -84,7 +84,7 @@ uv run llsim retrieve \
   --queries data/queries/arguments \
   --cases-pattern "*.json" \
   --loader llsim.arguments:load \
-  --retriever llsim.arguments.RETRIEVER \
+  --retriever llsim.arguments:RETRIEVER \
   --out data/output/arguments/baseline.json
 ```
 

@@ -97,11 +97,13 @@ def openai_provider(model: str):
     )
 
 
+# TODO: Dynamically compute the cross product and provide the list of preference pairs in the prompt
+# TODO: Repeat the request until all documents are present in the response
 PROMPT = cbrkit.synthesis.prompts.default(
     "Given a list of documents and a query, generate preferences between the documents with respect to the query. "
+    "Please compute the cross-product of the documents and provide the pairwise preferences. "
     "Only include documents IDs that were provided in the list. "
     "The IDs are given as markdown headings. "
-    "Do not include attributes or nodes from invididual documents in the preferences. "
 )
 POOLING_PROMPT = cbrkit.synthesis.prompts.pooling(
     "The following pairwise preferences were predicted. "
@@ -110,7 +112,7 @@ POOLING_PROMPT = cbrkit.synthesis.prompts.pooling(
     "This will later be used to calculate the PageRank scores, so a complete matrix is required. "
 )
 
-retriever_overlap = Retriever(
+RETRIEVER_CHUNKS = Retriever(
     cbrkit.synthesis.chunks(
         cbrkit.synthesis.build(openai_provider("gpt-4o-mini-2024-07-18"), PROMPT),
         cbrkit.synthesis.pooling(openai_provider("o3-mini-2025-01-31"), POOLING_PROMPT),
@@ -119,14 +121,6 @@ retriever_overlap = Retriever(
     )
 )
 
-retriever_chunks = Retriever(
-    cbrkit.synthesis.chunks(
-        cbrkit.synthesis.build(openai_provider("gpt-4o-mini-2024-07-18"), PROMPT),
-        cbrkit.synthesis.pooling(openai_provider("o3-mini-2025-01-31"), POOLING_PROMPT),
-        size=20,
-    )
-)
-
-retriever_full = Retriever(
+RETRIEVER_FULL = Retriever(
     cbrkit.synthesis.build(openai_provider("o3-mini-2025-01-31"), PROMPT)
 )
