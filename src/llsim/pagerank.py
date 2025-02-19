@@ -1,12 +1,15 @@
+import itertools
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import cbrkit
 import httpx
 import rustworkx
 from openai import AsyncOpenAI
 from pydantic import BaseModel
+from rustworkx.rustworkx import PyDiGraph
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +19,6 @@ MAX_CONFIDENCE = 5
 class SynthesisPreference(BaseModel):
     winner_id: str
     loser_id: str
-    # confidence: Annotated[
-    #     int, Field(description=f"Must be between 0 and {MAX_CONFIDENCE}")
-    # ]
 
 
 class SynthesisResponse(BaseModel):
@@ -31,35 +31,157 @@ class PageRankSim(cbrkit.typing.StructuredValue[float]):
     preferences: list[str]
 
 
+def preferences2graph[V](
+    res: SynthesisResponse, casebase: cbrkit.typing.Casebase[str, V]
+) -> tuple[PyDiGraph[str, None], dict[str, int]]:
+    g: PyDiGraph[str, None] = rustworkx.PyDiGraph()
+
+    id_map = {key: g.add_node(key) for key in casebase.keys()}
+
+    for entry in res.preferences:
+        if entry.winner_id not in id_map:
+            logger.error(f"KeyError: {entry.winner_id}")
+        if entry.loser_id not in id_map:
+            logger.error(f"KeyError: {entry.loser_id}")
+
+        if (winner_id := id_map.get(entry.winner_id)) and (
+            loser_id := id_map.get(entry.loser_id)
+        ):
+            g.add_edge(loser_id, winner_id, None)
+
+    return g, id_map
+
+
+def graph2preferences(
+    g: PyDiGraph[str, None], id_map: dict[str, int]
+) -> SynthesisResponse:
+    preferences = []
+    id_map_inv = {v: k for k, v in id_map.items()}
+
+    for node in g.node_indices():
+        for successor in g.successor_indices(node):
+            preferences.append(
+                SynthesisPreference(
+                    winner_id=id_map_inv[successor],
+                    loser_id=id_map_inv[node],
+                )
+            )
+
+    return SynthesisResponse(preferences=preferences)
+
+
+def request[V](
+    provider: cbrkit.typing.BatchConversionFunc[str, SynthesisResponse],
+    batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
+    prev_responses: Sequence[SynthesisResponse],
+) -> Sequence[SynthesisResponse]:
+    requests: list[str | None] = []
+
+    for res, (casebase, query) in zip(prev_responses, batches, strict=True):
+        all_combinations = itertools.combinations(casebase.keys(), 2)
+        predicted_combinations = [
+            (entry.winner_id, entry.loser_id) for entry in res.preferences
+        ]
+        missing_combinations = set(all_combinations) - set(predicted_combinations)
+        missing_keys = {key[0] for key in missing_combinations} | {
+            key[1] for key in missing_combinations
+        }
+
+        if missing_combinations:
+            requests.append(
+                "\n\n".join(
+                    [
+                        prompt_combinations(list(missing_combinations)),
+                        cbrkit.synthesis.prompts.default()(
+                            {
+                                key: value
+                                for key, value in casebase.items()
+                                if key in missing_keys
+                            },
+                            query,
+                            None,
+                        ),
+                    ]
+                )
+            )
+        else:
+            requests.append(None)
+
+    next_responses_raw = provider([batch for batch in requests if batch is not None])
+    next_responses = [
+        next_responses_raw[i]
+        if batch is not None
+        else SynthesisResponse(preferences=[])
+        for i, batch in enumerate(requests)
+    ]
+
+    return [
+        SynthesisResponse(
+            preferences=response.preferences + retried_response.preferences
+        )
+        for response, retried_response in zip(
+            prev_responses, next_responses, strict=True
+        )
+    ]
+
+
+def infer_missing[V](
+    batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
+    prev_responses: Sequence[SynthesisResponse],
+) -> Sequence[SynthesisResponse]:
+    new_responses: list[SynthesisResponse] = []
+
+    for res, (casebase, _) in zip(prev_responses, batches, strict=True):
+        new_preferences: list[SynthesisPreference] = []
+        all_combinations = itertools.combinations(casebase.keys(), 2)
+        predicted_combinations = [
+            (entry.winner_id, entry.loser_id) for entry in res.preferences
+        ]
+        missing_combinations = set(all_combinations) - set(predicted_combinations)
+
+        if missing_combinations:
+            g, id_map = preferences2graph(res, casebase)
+            for source, target in missing_combinations:
+                if (source_id := id_map.get(source)) and (
+                    target_id := id_map.get(target)
+                ):
+                    if rustworkx.has_path(g, source_id, target_id):
+                        new_preferences.append(
+                            SynthesisPreference(loser_id=source, winner_id=target)
+                        )
+                    elif rustworkx.has_path(g, target_id, source_id):
+                        new_preferences.append(
+                            SynthesisPreference(loser_id=target, winner_id=source)
+                        )
+
+        new_responses.append(
+            SynthesisResponse(preferences=res.preferences + new_preferences)
+        )
+
+    return new_responses
+
+
 @dataclass(slots=True, frozen=True)
 class Retriever[V]:
-    synthesis_func: cbrkit.typing.SynthesizerFunc[
-        SynthesisResponse, str, V, PageRankSim
-    ]
+    provider: cbrkit.typing.BatchConversionFunc[str, SynthesisResponse]
+    tries: int = 1
+    infer_missing: bool = True
 
     def __call__(
         self,
         batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
     ) -> Sequence[Mapping[str, PageRankSim]]:
-        responses = self.synthesis_func([(*batch, None) for batch in batches])
         similarities: list[Mapping[str, PageRankSim]] = []
+        responses = [SynthesisResponse(preferences=[]) for _ in batches]
+
+        for _ in range(self.tries):
+            responses = request(self.provider, batches, responses)
+
+            if self.infer_missing:
+                responses = infer_missing(batches, responses)
 
         for res, (casebase, _) in zip(responses, batches, strict=True):
-            g = rustworkx.PyDiGraph()
-
-            id_map = {key: g.add_node(key) for key in casebase.keys()}
-
-            for entry in res.preferences:
-                if entry.winner_id not in id_map:
-                    logger.error(f"KeyError: {entry.winner_id}")
-                if entry.loser_id not in id_map:
-                    logger.error(f"KeyError: {entry.loser_id}")
-
-                if (winner_id := id_map.get(entry.winner_id)) and (
-                    loser_id := id_map.get(entry.loser_id)
-                ):
-                    g.add_edge(loser_id, winner_id, None)
-
+            g, id_map = preferences2graph(res, casebase)
             pagerank = rustworkx.pagerank(g, alpha=0.85)
             scores = {key: pagerank[id_map[key]] for key in casebase.keys()}
 
@@ -97,30 +219,54 @@ def openai_provider(model: str):
     )
 
 
-# TODO: Dynamically compute the cross product and provide the list of preference pairs in the prompt
-# TODO: Repeat the request until all documents are present in the response
-PROMPT = cbrkit.synthesis.prompts.default(
-    "Given a list of documents and a query, generate preferences between the documents with respect to the query. "
-    "Please compute the cross-product of the documents and provide the pairwise preferences. "
-    "Only include documents IDs that were provided in the list. "
-    "The IDs are given as markdown headings. "
-)
-POOLING_PROMPT = cbrkit.synthesis.prompts.pooling(
-    "The following pairwise preferences were predicted. "
-    "As not all documents were available, the preferences are split into multiple chunks. "
-    "Please combine the partial results and create missing transitive preferences to get the final ranking. "
-    "This will later be used to calculate the PageRank scores, so a complete matrix is required. "
-)
+# openai_o3_mini = openai_provider("o3-mini-2025-01-31")
+openai_4o_mini = openai_provider("gpt-4o-mini-2024-07-18")
 
-RETRIEVER_CHUNKS = Retriever(
-    cbrkit.synthesis.chunks(
-        cbrkit.synthesis.build(openai_provider("gpt-4o-mini-2024-07-18"), PROMPT),
-        cbrkit.synthesis.pooling(openai_provider("o3-mini-2025-01-31"), POOLING_PROMPT),
-        size=1,
-        overlap=1,
+
+def prompt_combinations(combinations: list[tuple[str, str]]) -> str:
+    dumper = cbrkit.dumpers.markdown()
+
+    return (
+        "Given a list of documents and a query, generate preferences between the documents with respect to the query. "
+        "The IDs are given as markdown headings. "
+        "We want a full pairwise preference matrix, so please provide the following preferences: "
+        f"\n{dumper(combinations)}"
     )
-)
+
+
+def prompt_instruction_builder(
+    casebase: cbrkit.typing.Casebase[str, Any], *args, **kwargs
+) -> str:
+    return prompt_combinations(list(itertools.combinations(casebase.keys(), 2)))
+
+
+def chunks_pooler(responses: Sequence[SynthesisResponse]) -> SynthesisResponse:
+    return SynthesisResponse(
+        preferences=list(
+            itertools.chain.from_iterable(
+                response.preferences for response in responses
+            )
+        )
+    )
+
+
+# TODO: use random subsets of the casebase and/or larger overlap
+# TODO: implement chunking approach that plays well with the way the request is built
+# RETRIEVER_CHUNKS = Retriever(
+#     cbrkit.synthesis.chunks(
+#         cbrkit.synthesis.build(
+#             openai_4o_mini,
+#             cbrkit.synthesis.prompts.default(prompt_instruction_builder),
+#         ),
+#         chunks_pooler,
+#         size=1,
+#         overlap=1,
+#     ),
+#     infer_missing=True,
+# )
 
 RETRIEVER_FULL = Retriever(
-    cbrkit.synthesis.build(openai_provider("o3-mini-2025-01-31"), PROMPT)
+    provider=openai_4o_mini,
+    tries=3,
+    infer_missing=True,
 )
