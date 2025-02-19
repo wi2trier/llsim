@@ -1,5 +1,6 @@
 import itertools
 import logging
+import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -10,6 +11,8 @@ import rustworkx
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 from rustworkx.rustworkx import PyDiGraph
+
+random.seed(42)
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +77,15 @@ def request[V](
     provider: cbrkit.typing.BatchConversionFunc[str, SynthesisResponse],
     batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
     prev_responses: Sequence[SynthesisResponse],
+    max_cases: int,
 ) -> Sequence[SynthesisResponse]:
     requests: list[str | None] = []
 
     for res, (casebase, query) in zip(prev_responses, batches, strict=True):
+        if len(casebase) > max_cases:
+            sampled_cases = random.sample(list(casebase.items()), max_cases)
+            casebase = dict(sampled_cases)
+
         all_combinations = itertools.combinations(casebase.keys(), 2)
         predicted_combinations = [
             (entry.winner_id, entry.loser_id) for entry in res.preferences
@@ -166,6 +174,7 @@ class Retriever[V]:
     provider: cbrkit.typing.BatchConversionFunc[str, SynthesisResponse]
     tries: int = 1
     infer_missing: bool = True
+    max_cases: int = 100
 
     def __call__(
         self,
@@ -175,7 +184,7 @@ class Retriever[V]:
         responses = [SynthesisResponse(preferences=[]) for _ in batches]
 
         for _ in range(self.tries):
-            responses = request(self.provider, batches, responses)
+            responses = request(self.provider, batches, responses, self.max_cases)
 
             if self.infer_missing:
                 responses = infer_missing(batches, responses)
@@ -250,22 +259,7 @@ def chunks_pooler(responses: Sequence[SynthesisResponse]) -> SynthesisResponse:
     )
 
 
-# TODO: use random subsets of the casebase and/or larger overlap
-# TODO: implement chunking approach that plays well with the way the request is built
-# RETRIEVER_CHUNKS = Retriever(
-#     cbrkit.synthesis.chunks(
-#         cbrkit.synthesis.build(
-#             openai_4o_mini,
-#             cbrkit.synthesis.prompts.default(prompt_instruction_builder),
-#         ),
-#         chunks_pooler,
-#         size=1,
-#         overlap=1,
-#     ),
-#     infer_missing=True,
-# )
-
-RETRIEVER_FULL = Retriever(
+RETRIEVER = Retriever(
     provider=openai_4o_mini,
     tries=3,
     infer_missing=True,
