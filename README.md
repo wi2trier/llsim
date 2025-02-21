@@ -97,3 +97,24 @@ uv run llsim evaluate-run \
   --result data/output/RESULT.json \
   --baseline data/output/BASELINE.json
 ```
+
+## Preferences/Centrality
+
+```shell
+# RECIPES
+uv run llsim retrieve \
+  --cases data/cases/recipes.json \
+  --loader llsim.recipes:load \
+  --retriever llsim.preferences:PreferencesRetriever \
+  --retriever-arg file=data/output/recipes/preferences.json \
+  --retriever-arg tries=3 \
+  --query-name W40
+uv run llsim retrieve \
+  --cases data/cases/recipes.json \
+  --loader llsim.recipes:load \
+  --retriever llsim.preferences:CentralityRetriever \
+  --out data/output/recipes/centrality.json \
+  --retriever-arg measures=pagerank,hits \
+  --retriever-arg file=data/output/recipes/preferences.json \
+  --query-name W40
+```

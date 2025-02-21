@@ -113,10 +113,11 @@ GRAPH_FAC_PRECOMPUTE = cbrkit.retrieval.build(
 GRAPH_FAC = cbrkit.retrieval.build(GRAPH_SIM_FACTORY, multiprocessing=True)
 
 
-RETRIEVER: cbrkit.typing.MaybeFactories[
+def RETRIEVERS() -> cbrkit.typing.MaybeFactories[
     cbrkit.typing.RetrieverFunc[
         str,
         Graph[str, NodeData, EdgeData, GraphData],
         float | cbrkit.sim.graphs.GraphSim[str],
     ]
-] = [GRAPH_FAC_PRECOMPUTE, GRAPH_FAC]
+]:
+    return [GRAPH_FAC_PRECOMPUTE, GRAPH_FAC]

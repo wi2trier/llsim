@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import cbrkit
-import httpx
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
+
+from llsim.provider import openai_provider
 
 
 class SimModelEntry(BaseModel):
@@ -50,40 +50,33 @@ class Retriever[R: BaseModel, V]:
         return func([(casebase, query, None) for casebase, query in batches])
 
 
-PROMPT = cbrkit.synthesis.prompts.default(
-    "Given a list of documents and a query, generate a ranking of the documents with respect to the query. "
-    "It should include all the documents in the list and must not include IDs that were not provided. "
-    "The IDs are given as markdown headings. "
-)
-
-
 def Synthesizer[T: BaseModel](
     model: str,
     response_type: type[T],
 ) -> cbrkit.typing.SynthesizerFunc[T, str, str, float]:
-    provider = cbrkit.synthesis.providers.openai(
+    provider = openai_provider(
         model=model,
         response_type=response_type,
-        temperature=1.0,
-        # https://github.com/openai/openai-python/blob/main/src/openai/_constants.py
-        client=AsyncOpenAI(
-            max_retries=3,
-            http_client=httpx.AsyncClient(
-                http2=True,
-                timeout=httpx.Timeout(timeout=120, connect=5),
-                limits=httpx.Limits(max_connections=50, max_keepalive_connections=25),
-            ),
+        system_message=(
+            "You are a helpful assistant with the following task: "
+            "Given a list of documents and a query, generate a ranking of the documents with respect to the query. "
+            "It should include all the documents in the list and must not include IDs that were not provided. "
+            "The IDs are given as markdown headings. "
         ),
     )
-    return cbrkit.synthesis.build(provider, PROMPT)
+
+    return cbrkit.synthesis.build(provider, cbrkit.synthesis.prompts.default())
 
 
-SIM_RETRIEVER = Retriever(
-    synthesis_func=Synthesizer("o3-mini-2025-01-31", SimModel),
-    conversion_func=from_sim_model,
-)
+def SIM_RETRIEVER():
+    return Retriever(
+        synthesis_func=Synthesizer("o3-mini-2025-01-31", SimModel),
+        conversion_func=from_sim_model,
+    )
 
-RANK_RETRIEVER = Retriever(
-    synthesis_func=Synthesizer("o3-mini-2025-01-31", RankModel),
-    conversion_func=from_rank_model,
-)
+
+def RANK_RETRIEVER():
+    return Retriever(
+        synthesis_func=Synthesizer("o3-mini-2025-01-31", RankModel),
+        conversion_func=from_rank_model,
+    )

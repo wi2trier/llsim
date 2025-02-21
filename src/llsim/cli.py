@@ -1,11 +1,13 @@
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
 
 import cbrkit
-import orjson
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from typer import Option, Typer
+
+from llsim import builder, preferences
 
 app = Typer(pretty_exceptions_enable=False)
 
@@ -22,18 +24,103 @@ def load_cases(
 
 
 @app.command()
+def build_preferences(
+    cases: Annotated[Path, Option()],
+    loader: Annotated[str, Option()],
+    out: Annotated[Path, Option()],
+    query_name: Annotated[list[str], Option(default_factory=list)],
+    tries: Annotated[int, Option()] = 1,
+    infer_missing: Annotated[bool, Option()] = True,
+    max_cases: Annotated[int, Option()] = 100,
+    queries: Annotated[Path | None, Option()] = None,
+    cases_pattern: str | None = None,
+    queries_pattern: str | None = None,
+):
+    _loader: Callable[..., Any] = cbrkit.helpers.load_callable(loader)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    if queries is None:
+        queries = cases
+
+    if queries_pattern is None:
+        queries_pattern = cases_pattern
+
+    _cases = load_cases(_loader, cases, cases_pattern)
+    _queries = load_cases(_loader, queries, queries_pattern)
+
+    if query_name:
+        _queries = {key: _queries[key] for key in query_name}
+
+    batches = [(_cases, query) for query in _queries.values()]
+
+    responses = [preferences.SynthesisResponse(preferences=[]) for _ in batches]
+
+    for _ in range(tries):
+        responses = preferences.request(batches, responses, max_cases)
+
+        if infer_missing:
+            responses = preferences.infer_missing(batches, responses)
+
+    with open(out, "w") as fp:
+        json.dump([entry.model_dump() for entry in responses], fp, indent=2)
+
+
+@app.command()
+def build_similarity(
+    cases: Annotated[Path, Option()],
+    loader: Annotated[str, Option()],
+    out: Annotated[Path, Option()],
+    query_name: Annotated[list[str], Option(default_factory=list)],
+    attribute: Annotated[list[str], Option(default_factory=list)],
+    queries: Annotated[Path | None, Option()] = None,
+    cases_pattern: str | None = None,
+    queries_pattern: str | None = None,
+):
+    _loader: Callable[..., Any] = cbrkit.helpers.load_callable(loader)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    if queries_pattern is None:
+        queries_pattern = cases_pattern
+
+    _cases = load_cases(_loader, cases, cases_pattern)
+
+    if queries is None:
+        _queries = {}
+    else:
+        _queries = load_cases(_loader, queries, queries_pattern)
+
+    if query_name:
+        _queries = {key: _queries[key] for key in query_name}
+
+    result = builder.build(_cases, _queries, attribute)
+
+    with out.open("w") as fp:
+        json.dump(result, fp, indent=2)
+
+
+@app.command()
 def retrieve(
     cases: Annotated[Path, Option()],
-    out: Annotated[Path, Option()],
     retriever: Annotated[str, Option()],
+    out: Annotated[Path, Option()],
+    retriever_arg: Annotated[list[str], Option(default_factory=dict)],
     loader: Annotated[str, Option()],
     query_name: Annotated[list[str], Option(default_factory=list)],
     queries: Annotated[Path | None, Option()] = None,
     cases_pattern: str | None = None,
     queries_pattern: str | None = None,
 ):
-    _retriever = cbrkit.helpers.load_callable(retriever)
-    _loader = cbrkit.helpers.load_callable(loader)
+    retriever_kwargs: dict[str, str] = {}
+
+    for arg in retriever_arg:
+        key, value = arg.split("=")
+        retriever_kwargs[key] = value
+
+    _retriever: Callable[..., Any] = cbrkit.helpers.load_object(retriever)(
+        **retriever_kwargs
+    )
+    _loader: Callable[..., Any] = cbrkit.helpers.load_callable(loader)
+
     out.parent.mkdir(parents=True, exist_ok=True)
 
     if queries is None:
@@ -50,8 +137,8 @@ def retrieve(
 
     result = cbrkit.retrieval.apply_queries(_cases, _queries, _retriever)
 
-    with out.open("wb") as fp:
-        fp.write(orjson.dumps(result.model_dump()))
+    with out.open("w") as fp:
+        json.dump(result.model_dump(), fp, indent=2)
 
 
 @app.command()
@@ -62,11 +149,11 @@ def evaluate_run(
     max_qrel: int | None = None,
     min_qrel: int = 0,
 ):
-    with baseline.open("rb") as fp:
-        _baseline = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
+    with baseline.open("r") as fp:
+        _baseline = cbrkit.model.Result.model_validate(json.load(fp))
 
-    with result.open("rb") as fp:
-        _result = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
+    with result.open("r") as fp:
+        _result = cbrkit.model.Result.model_validate(json.load(fp))
 
     metrics = cbrkit.eval.retrieval_step(
         cbrkit.eval.retrieval_step_to_qrels(_baseline.final_step, max_qrel, min_qrel),
@@ -85,6 +172,7 @@ def evaluate_run(
         key: entry.similarities for key, entry in _result.final_step.queries.items()
     }
 
+    # TODO: Currently does not handle k values
     mse = cbrkit.eval.compute_score_metrics(
         baseline_scores,
         result_scores,
@@ -106,8 +194,8 @@ def evaluate_qrels(
     k: Annotated[list[int], Option(default_factory=list)],
     queries_pattern: str | None = None,
 ):
-    with result.open("rb") as fp:
-        _result = cbrkit.model.Result.model_validate(orjson.loads(fp.read()))
+    with result.open("r") as fp:
+        _result = cbrkit.model.Result.model_validate(json.load(fp))
 
     _loader = cbrkit.helpers.load_callable(loader)
     _queries = load_cases(_loader, queries, queries_pattern)
