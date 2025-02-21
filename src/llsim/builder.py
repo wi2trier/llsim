@@ -2,7 +2,6 @@ import json
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from numbers import Number
 from types import UnionType
 from typing import Any, TypedDict, Union, cast, get_args, get_origin
 
@@ -113,7 +112,7 @@ def build(
 
                 if issubclass(kind, str):
                     attribute_kinds[name].append("string")
-                elif issubclass(kind, Number):
+                elif issubclass(kind, float | int):
                     attribute_kinds[name].append("number")
 
     for name, kinds in attribute_kinds.items():
