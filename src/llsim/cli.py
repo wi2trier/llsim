@@ -75,6 +75,7 @@ def build_similarity(
     queries: Annotated[Path | None, Option()] = None,
     cases_pattern: str | None = None,
     queries_pattern: str | None = None,
+    attribute_table: str | None = None,
 ):
     _loader: Callable[..., Any] = cbrkit.helpers.load_callable(loader)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -92,7 +93,7 @@ def build_similarity(
     if query_name:
         _queries = {key: _queries[key] for key in query_name}
 
-    result = builder.build(_cases, _queries, attribute)
+    result = builder.build(_cases, _queries, attribute, attribute_table)
 
     with out.open("w") as fp:
         json.dump(result, fp, indent=2)

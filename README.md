@@ -102,19 +102,47 @@ uv run llsim evaluate-run \
 
 ```shell
 # RECIPES
-uv run llsim retrieve \
+uv run llsim build-preferences \
   --cases data/cases/recipes.json \
   --loader llsim.recipes:load \
-  --retriever llsim.preferences:PreferencesRetriever \
-  --retriever-arg file=data/output/recipes/preferences.json \
-  --retriever-arg tries=3 \
+  --tries 3 \
+  --out data/output/recipes/preferences.json \
   --query-name W40
 uv run llsim retrieve \
   --cases data/cases/recipes.json \
   --loader llsim.recipes:load \
-  --retriever llsim.preferences:CentralityRetriever \
+  --retriever llsim.centrality:Retriever \
   --out data/output/recipes/centrality.json \
   --retriever-arg measures=pagerank,hits \
   --retriever-arg file=data/output/recipes/preferences.json \
   --query-name W40
+```
+
+## SimBuilder
+
+```shell
+# CARS
+uv run llsim build-similarity \
+  --cases data/cases/cars.json \
+  --loader llsim.cars:load \
+  --out data/output/cars/builder-config.json
+uv run llsim retrieve \
+  --cases data/cases/cars.json \
+  --loader llsim.cars:load \
+  --retriever llsim.builder:Retriever \
+  --retriever-arg file=data/output/cars/builder-config.json \
+  --out data/output/cars/builder.json
+
+# RECIPES
+uv run llsim build-similarity \
+  --cases data/cases/recipes.json \
+  --loader llsim.recipes:load \
+  --out data/output/recipes/builder-config.json \
+  --attribute-table type
+uv run llsim retrieve \
+  --cases data/cases/recipes.json \
+  --loader llsim.recipes:load \
+  --retriever llsim.builder:Retriever \
+  --retriever-arg file=data/output/recipes/builder-config.json \
+  --out data/output/recipes/builder.json
 ```
