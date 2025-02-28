@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated
@@ -5,7 +6,9 @@ from typing import Annotated
 import cbrkit
 from pydantic import BaseModel, Field
 
-from llsim.provider import openai_provider
+from llsim.provider import Provider
+
+logger = logging.getLogger(__name__)
 
 
 class SimModelEntry(BaseModel):
@@ -47,15 +50,32 @@ class Retriever[R: BaseModel, V]:
     ) -> Sequence[Mapping[str, float]]:
         func = cbrkit.synthesis.transpose(self.synthesis_func, self.conversion_func)
 
-        return func([(casebase, query, None) for casebase, query in batches])
+        raw_sims = func([(casebase, query, None) for casebase, query in batches])
+        parsed_sims: list[dict[str, float]] = []
+
+        for raw_sim, (casebase, _) in zip(raw_sims, batches, strict=True):
+            parsed_sim: dict[str, float] = {}
+
+            for key in casebase.keys():
+                if sim := raw_sim.get(key):
+                    parsed_sim[key] = sim
+                else:
+                    logger.info(f"Key {key} not in response")
+
+            for key in raw_sim.keys():
+                if key not in casebase:
+                    logger.info(f"Key {key} not in casebase")
+
+            parsed_sims.append(parsed_sim)
+
+        return parsed_sims
 
 
 def Synthesizer[T: BaseModel](
-    model: str,
+    provider: Provider,
     response_type: type[T],
 ) -> cbrkit.typing.SynthesizerFunc[T, str, str, float]:
-    provider = openai_provider(
-        model=model,
+    generation_func = provider.build(
         response_type=response_type,
         system_message=(
             "You are a helpful assistant with the following task: "
@@ -65,18 +85,18 @@ def Synthesizer[T: BaseModel](
         ),
     )
 
-    return cbrkit.synthesis.build(provider, cbrkit.synthesis.prompts.default())
+    return cbrkit.synthesis.build(generation_func, cbrkit.synthesis.prompts.default())
 
 
-def SIM_RETRIEVER():
+def SIM_RETRIEVER(model: str):
     return Retriever(
-        synthesis_func=Synthesizer("o3-mini-2025-01-31", SimModel),
+        synthesis_func=Synthesizer(Provider(model), SimModel),
         conversion_func=from_sim_model,
     )
 
 
-def RANK_RETRIEVER():
+def RANK_RETRIEVER(model: str):
     return Retriever(
-        synthesis_func=Synthesizer("o3-mini-2025-01-31", RankModel),
+        synthesis_func=Synthesizer(Provider(model), RankModel),
         conversion_func=from_rank_model,
     )

@@ -8,7 +8,7 @@ import cbrkit
 import rustworkx
 from pydantic import BaseModel
 
-from llsim.provider import openai_provider
+from llsim.provider import Provider
 
 random.seed(42)
 
@@ -26,10 +26,6 @@ class SynthesisPreference(BaseModel):
 
 class SynthesisResponse(BaseModel):
     preferences: list[SynthesisPreference]
-
-
-# openai_o3_mini = openai_provider("o3-mini-2025-01-31")
-openai_4o_mini = openai_provider("gpt-4o-mini-2024-07-18", SynthesisResponse)
 
 
 def prompt_combinations(combinations: list[tuple[str, str]]) -> str:
@@ -83,10 +79,12 @@ def graph2preferences(
 
 
 def request[V](
+    provider: Provider,
     batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
     prev_responses: Sequence[SynthesisResponse],
     max_cases: int,
 ) -> Sequence[SynthesisResponse]:
+    generation_func = provider.build(SynthesisResponse)
     requests: list[str | None] = []
 
     for res, (casebase, query) in zip(prev_responses, batches, strict=True):
@@ -123,7 +121,7 @@ def request[V](
         else:
             requests.append(None)
 
-    next_responses_raw = openai_4o_mini(
+    next_responses_raw = generation_func(
         [batch for batch in requests if batch is not None]
     )
     next_responses = [

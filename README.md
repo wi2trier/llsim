@@ -43,7 +43,7 @@ The attributes of the task nodes are aggregated by the average of the similariti
 
 The cases of the cars case base are modeled as collections of attribute-value pairs (feature vector cases).
 
-### Similarity Compositon
+### Similarity Composition
 
 The similarity of the cases is calculated by the weighted average of the similarities of the following attribute-value pairs:
 
@@ -66,36 +66,36 @@ The similarity of the cases is calculated by the weighted average of the similar
 ```shell
 # RECIPES
 uv run llsim retrieve \
-  --cases data/cases/recipes.json \
-  --loader llsim.recipes:load \
-  --retriever llsim.recipes:RETRIEVER \
-  --out data/output/recipes/baseline.json
+--cases data/cases/recipes.json \
+--loader llsim.recipes:load \
+--retriever llsim.recipes:RETRIEVER \
+--out data/output/recipes/baseline.json
 
 # CARS
 uv run llsim retrieve \
-  --cases data/cases/cars.json \
-  --loader llsim.cars:load \
-  --retriever llsim.cars:RETRIEVER \
-  --out data/output/cars/baseline.json
+--cases data/cases/cars.json \
+--loader llsim.cars:load \
+--retriever llsim.cars:RETRIEVER \
+--out data/output/cars/baseline.json
 
 # ARGUMENTS
 uv run llsim retrieve \
-  --cases data/cases/arguments \
-  --queries data/queries/arguments \
-  --cases-pattern "*.json" \
-  --loader llsim.arguments:load \
-  --retriever llsim.arguments:RETRIEVER \
-  --out data/output/arguments/baseline.json
+--cases data/cases/arguments \
+--queries data/queries/arguments \
+--cases-pattern "*.json" \
+--loader llsim.arguments:load \
+--retriever llsim.arguments:RETRIEVER \
+--out data/output/arguments/baseline.json
 ```
 
 ## Evaluation
 
 ```shell
 uv run llsim evaluate-run \
-  --max-qrel 5 \
-  --k 3 --k 5 --k 10 \
-  --result data/output/RESULT.json \
-  --baseline data/output/BASELINE.json
+--max-qrel 5 \
+--k 3 --k 5 --k 10 \
+--result data/output/RESULT.json \
+--baseline data/output/DIR/baseline.json
 ```
 
 ## Preferences/Centrality
@@ -103,19 +103,19 @@ uv run llsim evaluate-run \
 ```shell
 # RECIPES
 uv run llsim build-preferences \
-  --cases data/cases/recipes.json \
-  --loader llsim.recipes:load \
-  --tries 3 \
-  --out data/output/recipes/preferences.json \
-  --query-name W40
+--cases data/cases/recipes.json \
+--loader llsim.recipes:load \
+--tries 3 \
+--out data/output/recipes/preferences.json \
+--query-name W40
 uv run llsim retrieve \
-  --cases data/cases/recipes.json \
-  --loader llsim.recipes:load \
-  --retriever llsim.centrality:Retriever \
-  --out data/output/recipes/centrality.json \
-  --retriever-arg measures=pagerank,hits \
-  --retriever-arg file=data/output/recipes/preferences.json \
-  --query-name W40
+--cases data/cases/recipes.json \
+--loader llsim.recipes:load \
+--retriever llsim.centrality:Retriever \
+--out data/output/recipes/centrality.json \
+--retriever-arg measures=pagerank,hits \
+--retriever-arg file=data/output/recipes/preferences.json \
+--query-name W40
 ```
 
 ## SimBuilder
@@ -123,26 +123,26 @@ uv run llsim retrieve \
 ```shell
 # CARS
 uv run llsim build-similarity \
-  --cases data/cases/cars.json \
-  --loader llsim.cars:load \
-  --out data/output/cars/builder-config.json
+--cases data/cases/cars.json \
+--loader llsim.cars:load \
+--out data/output/cars/builder-config.json
 uv run llsim retrieve \
-  --cases data/cases/cars.json \
-  --loader llsim.cars:load \
-  --retriever llsim.builder:Retriever \
-  --retriever-arg file=data/output/cars/builder-config.json \
-  --out data/output/cars/builder.json
+--cases data/cases/cars.json \
+--loader llsim.cars:load \
+--retriever llsim.builder:Retriever \
+--retriever-arg file=data/output/cars/builder-config.json \
+--out data/output/cars/builder.json
 
 # RECIPES
 uv run llsim build-similarity \
-  --cases data/cases/recipes.json \
-  --loader llsim.recipes:load \
-  --out data/output/recipes/builder-config.json \
-  --attribute-table type
+--cases data/cases/recipes.json \
+--loader llsim.recipes:load \
+--out data/output/recipes/builder-config.json \
+--attribute-table type
 uv run llsim retrieve \
-  --cases data/cases/recipes.json \
-  --loader llsim.recipes:load \
-  --retriever llsim.builder:Retriever \
-  --retriever-arg file=data/output/recipes/builder-config.json \
-  --out data/output/recipes/builder.json
+--cases data/cases/recipes.json \
+--loader llsim.recipes:load \
+--retriever llsim.builder:Retriever \
+--retriever-arg file=data/output/recipes/builder-config.json \
+--out data/output/recipes/builder.json
 ```

@@ -8,7 +8,7 @@ from typing import Any, TypedDict, Union, cast, get_args, get_origin
 import cbrkit
 from pydantic import BaseModel
 
-from llsim.provider import openai_provider
+from llsim.provider import Provider
 
 type SimFuncGenerator[T] = Callable[
     ..., cbrkit.typing.AnySimFunc[T, cbrkit.typing.Float]
@@ -108,26 +108,24 @@ class AttributeTableConfig(TypedDict):
 
 def build[V](
     casebase: cbrkit.typing.Casebase[str, V],
-    queries: cbrkit.typing.Casebase[str, V],
     attributes: list[str],
     attribute_table: str | None,
+    provider: Provider,
 ) -> SerializedConfig | AttributeTableConfig:
-    raw_cases = {key: casebase[key] for key in casebase}
-    raw_cases.update({key: queries[key] for key in queries})
     cases: dict[str, dict[str, Any]] = {}
 
-    if any(isinstance(case, cbrkit.model.graph.Graph) for case in raw_cases.values()):
-        raw_cases = cast(dict[str, cbrkit.model.graph.Graph], raw_cases)
-
-        for case_key, case in raw_cases.items():
+    if any(isinstance(case, cbrkit.model.graph.Graph) for case in casebase.values()):
+        for case_key, case in cast(
+            cbrkit.typing.Casebase[str, cbrkit.model.graph.Graph], casebase
+        ).items():
             for node_key, node in case.nodes.items():
                 cases[f"{case_key}-{node_key}"] = node.value
 
     else:
-        cases = {key: cast(dict[str, Any], case) for key, case in raw_cases.items()}
+        cases = {key: cast(dict[str, Any], case) for key, case in casebase.items()}
 
     if not attribute_table:
-        return build_part(cases, attributes)
+        return build_part(cases, attributes, provider)
 
     attribute_table_values: set[Any] = (
         {case[attribute_table] for case in cases.values()} if attribute_table else set()
@@ -143,6 +141,7 @@ def build[V](
                     if case[attribute_table] == value
                 },
                 attributes,
+                provider,
             )
             for value in attribute_table_values
         },
@@ -152,6 +151,7 @@ def build[V](
 def build_part(
     cases: Mapping[str, Mapping[str, Any]],
     attributes: list[str],
+    provider: Provider,
 ) -> SerializedConfig:
     attribute_kinds: defaultdict[str, list[str]] = defaultdict(list)
     kind_lookup: defaultdict[str, set[str]] = defaultdict(set)
@@ -188,11 +188,10 @@ def build_part(
         ]
 
         MeasureModel = Union[*measure_models]
-        provider = openai_provider(
-            "o3-mini-2025-01-31",
+        generation_func = provider.build(
             MeasureModel,  # pyright: ignore
             (
-                "Compute the similarityfor the given documents by calling the most suitable tool with the correct arguments. "
+                "Compute the similarity for the given documents by calling the most suitable tool with the correct arguments. "
                 "The response should be based on the presented values and not their keys/ids. "
             ),
         )
@@ -208,7 +207,7 @@ def build_part(
             for name in names
         ]
 
-        responses = provider(requests)
+        responses = generation_func(requests)
 
         for name, response in zip(names, responses):
             configurations[name] = SerializedConfigEntry(

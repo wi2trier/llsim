@@ -1,13 +1,14 @@
 import json
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import cbrkit
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from typer import Option, Typer
 
 from llsim import builder, preferences
+from llsim.provider import Provider
 
 app = Typer(pretty_exceptions_enable=False)
 
@@ -23,19 +24,57 @@ def load_cases(
     raise ValueError("Invalid path or pattern")
 
 
+def load_domain(name: str) -> tuple[str, Path, str | None, Path | None, str | None]:
+    match name:
+        case "recipes":
+            return (
+                "llsim.recipes:load",
+                Path("data/cases/recipes.json"),
+                None,
+                None,
+                None,
+            )
+        case "cars":
+            return (
+                "llsim.cars:load",
+                Path("data/cases/cars.json"),
+                None,
+                None,
+                None,
+            )
+        case "arguments":
+            return (
+                "llsim.arguments:load",
+                Path("data/cases/arguments"),
+                "*.json",
+                Path("data/cases/arguments"),
+                "*.json",
+            )
+
+    raise ValueError(f"Unknown domain: {name}")
+
+
 @app.command()
 def build_preferences(
-    cases: Annotated[Path, Option()],
-    loader: Annotated[str, Option()],
     out: Annotated[Path, Option()],
+    model: Annotated[str, Option()],
     query_name: Annotated[list[str], Option(default_factory=list)],
     tries: Annotated[int, Option()] = 1,
     infer_missing: Annotated[bool, Option()] = True,
     max_cases: Annotated[int, Option()] = 100,
     queries: Annotated[Path | None, Option()] = None,
+    domain: str | None = None,
+    loader: str | None = None,
+    cases: Path | None = None,
     cases_pattern: str | None = None,
     queries_pattern: str | None = None,
 ):
+    if domain is not None:
+        loader, cases, cases_pattern, queries, queries_pattern = load_domain(domain)
+
+    assert loader is not None, "loader is required"
+    assert cases is not None, "cases is required"
+
     _loader: Callable[..., Any] = cbrkit.helpers.load_callable(loader)
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -56,7 +95,7 @@ def build_preferences(
     responses = [preferences.SynthesisResponse(preferences=[]) for _ in batches]
 
     for _ in range(tries):
-        responses = preferences.request(batches, responses, max_cases)
+        responses = preferences.request(Provider(model), batches, responses, max_cases)
 
         if infer_missing:
             responses = preferences.infer_missing(batches, responses)
@@ -67,33 +106,27 @@ def build_preferences(
 
 @app.command()
 def build_similarity(
-    cases: Annotated[Path, Option()],
-    loader: Annotated[str, Option()],
     out: Annotated[Path, Option()],
-    query_name: Annotated[list[str], Option(default_factory=list)],
+    model: Annotated[str, Option()],
     attribute: Annotated[list[str], Option(default_factory=list)],
-    queries: Annotated[Path | None, Option()] = None,
+    domain: str | None = None,
+    loader: str | None = None,
+    cases: Path | None = None,
     cases_pattern: str | None = None,
-    queries_pattern: str | None = None,
     attribute_table: str | None = None,
 ):
+    if domain is not None:
+        loader, cases, cases_pattern, _, _ = load_domain(domain)
+
+    assert loader is not None, "loader is required"
+    assert cases is not None, "cases is required"
+
     _loader: Callable[..., Any] = cbrkit.helpers.load_callable(loader)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    if queries_pattern is None:
-        queries_pattern = cases_pattern
-
     _cases = load_cases(_loader, cases, cases_pattern)
 
-    if queries is None:
-        _queries = {}
-    else:
-        _queries = load_cases(_loader, queries, queries_pattern)
-
-    if query_name:
-        _queries = {key: _queries[key] for key in query_name}
-
-    result = builder.build(_cases, _queries, attribute, attribute_table)
+    result = builder.build(_cases, attribute, attribute_table, Provider(model))
 
     with out.open("w") as fp:
         json.dump(result, fp, indent=2)
@@ -101,16 +134,23 @@ def build_similarity(
 
 @app.command()
 def retrieve(
-    cases: Annotated[Path, Option()],
     retriever: Annotated[str, Option()],
     out: Annotated[Path, Option()],
     retriever_arg: Annotated[list[str], Option(default_factory=dict)],
-    loader: Annotated[str, Option()],
     query_name: Annotated[list[str], Option(default_factory=list)],
-    queries: Annotated[Path | None, Option()] = None,
+    domain: str | None = None,
+    loader: str | None = None,
+    cases: Path | None = None,
+    queries: Path | None = None,
     cases_pattern: str | None = None,
     queries_pattern: str | None = None,
 ):
+    if domain is not None:
+        loader, cases, cases_pattern, queries, queries_pattern = load_domain(domain)
+
+    assert loader is not None, "loader is required"
+    assert cases is not None, "cases is required"
+
     retriever_kwargs: dict[str, str] = {}
 
     for arg in retriever_arg:
@@ -142,61 +182,98 @@ def retrieve(
         json.dump(result.model_dump(), fp, indent=2)
 
 
+def normalize_similarities(
+    result: cbrkit.model.Result[Any, Any, Any, float],
+) -> dict[Any, dict[Any, float]]:
+    min_sim = min(result.final_step.similarities.values())
+    max_sim = max(result.final_step.similarities.values())
+
+    return {
+        query: {
+            case: (sim - min_sim) / (max_sim - min_sim)
+            for case, sim in entry.similarities.items()
+        }
+        for query, entry in result.final_step.queries.items()
+    }
+
+
+def print_metrics(metrics: dict[str, dict[str, float]]):
+    metric_names = sorted(list(metrics.values())[0].keys())
+
+    print("\\toprule")
+    print("name & " + " & ".join(metric_names) + " \\\\")
+    print("\\midrule")
+
+    for key, values in metrics.items():
+        pretty_value = " & ".join(f"{values[metric]:.3f}" for metric in metric_names)
+        print(f"{key} & {pretty_value} \\\\")
+
+    print("\\bottomrule")
+
+
+# TODO: Add coverage (i.e., the number of results where the run actually contains the required values)
+
+
 @app.command()
 def evaluate_run(
-    result: Annotated[Path, Option()],
-    baseline: Annotated[Path, Option()],
+    directory: Path,
     k: Annotated[list[int], Option(default_factory=list)],
     max_qrel: int | None = None,
     min_qrel: int = 0,
 ):
-    with baseline.open("r") as fp:
-        _baseline = cbrkit.model.Result.model_validate(json.load(fp))
+    baseline_path = directory / "baseline.json"
+    run_paths = directory.glob("*.json")
+    metric_funcs = cbrkit.eval.generate_metrics(ks=k + [None])
+    metrics: dict[str, dict[str, float]] = {}
 
-    with result.open("r") as fp:
-        _result = cbrkit.model.Result.model_validate(json.load(fp))
+    with baseline_path.open("r") as fp:
+        baseline = cbrkit.model.Result.model_validate(json.load(fp))
 
-    metrics = cbrkit.eval.retrieval_step(
-        cbrkit.eval.retrieval_step_to_qrels(_baseline.final_step, max_qrel, min_qrel),
-        _result.final_step,
-        metrics=cbrkit.eval.generate_metrics(ks=k + [None]),
+    baseline_qrels = cbrkit.eval.retrieval_step_to_qrels(
+        baseline.final_step, max_qrel, min_qrel
     )
+    baseline_sims = normalize_similarities(baseline)
 
-    for key, value in metrics.items():
-        print(f"{key}: {value:.3f}")
+    for run_path in run_paths:
+        if run_path == baseline_path:
+            continue
 
-    # compute mean average error between similarities from llm and benchmark
-    baseline_scores = {
-        key: entry.similarities for key, entry in _baseline.final_step.queries.items()
-    }
-    result_scores = {
-        key: entry.similarities for key, entry in _result.final_step.queries.items()
-    }
+        with run_path.open("r") as fp:
+            run = cbrkit.model.Result.model_validate(json.load(fp))
 
-    # TODO: Currently does not handle k values
-    mse = cbrkit.eval.compute_score_metrics(
-        baseline_scores,
-        result_scores,
-        {
-            "mse": mean_squared_error,
-            "mae": mean_absolute_error,
-        },
-    )
+        metrics[run_path.stem] = cbrkit.eval.retrieval_step(
+            baseline_qrels,
+            run.final_step,
+            metrics=metric_funcs,
+        )
 
-    for key, value in mse.items():
-        print(f"{key}: {value:.3f}")
+        error_metrics = cbrkit.eval.compute_score_metrics(
+            baseline_sims,
+            normalize_similarities(run),
+            {
+                "mse": mean_squared_error,
+                "mae": mean_absolute_error,
+            },
+        )
+        metrics[run_path.stem].update(cast(dict[str, float], error_metrics))
+
+    print_metrics(metrics)
 
 
 @app.command()
 def evaluate_qrels(
-    result: Annotated[Path, Option()],
-    queries: Annotated[Path, Option()],
-    loader: Annotated[str, Option()],
+    directory: Path,
     k: Annotated[list[int], Option(default_factory=list)],
+    domain: str | None = None,
+    loader: str | None = None,
+    queries: Path | None = None,
     queries_pattern: str | None = None,
 ):
-    with result.open("r") as fp:
-        _result = cbrkit.model.Result.model_validate(json.load(fp))
+    if domain is not None:
+        loader, _, _, queries, queries_pattern = load_domain(domain)
+
+    assert loader is not None, "loader is required"
+    assert queries is not None, "queries is required"
 
     _loader = cbrkit.helpers.load_callable(loader)
     _queries = load_cases(_loader, queries, queries_pattern)
@@ -204,12 +281,21 @@ def evaluate_qrels(
     qrels: dict[str, dict[str, int]] = {
         key: query.value["qrels"] for key, query in _queries.items()
     }
+    run_paths = directory.glob("*.json")
+    metrics: dict[str, dict[str, float]] = {}
 
-    metrics = cbrkit.eval.retrieval_step(
-        qrels,
-        _result.final_step,
-        metrics=cbrkit.eval.generate_metrics(ks=k),
-    )
+    for run_path in run_paths:
+        with run_path.open("r") as fp:
+            run = cbrkit.model.Result.model_validate(json.load(fp))
 
-    for key, value in metrics.items():
-        print(f"{key}: {value:.3f}")
+        metrics[run_path.stem] = cbrkit.eval.retrieval_step(
+            qrels,
+            run.final_step,
+            metrics=cbrkit.eval.generate_metrics(ks=k),
+        )
+
+    print_metrics(metrics)
+
+
+if __name__ == "__main__":
+    app()
