@@ -78,6 +78,74 @@ def graph2preferences(
     return SynthesisResponse(preferences=preferences)
 
 
+def request_pairwise[V](
+    provider: Provider,
+    batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
+    prev_responses: Sequence[SynthesisResponse],
+    max_cases: int,
+) -> Sequence[SynthesisResponse]:
+    generation_func = provider.build(
+        str,
+        system_message=(
+            "Given two documents and a query, which one is more relevant to the query? "
+            "Give only the ID of the winner document. "
+            "Do not generate anything else. "
+        ),
+    )
+    synthesis_func = cbrkit.synthesis.build(
+        generation_func, cbrkit.synthesis.prompts.default()
+    )
+    responses: list[SynthesisResponse] = []
+
+    for prev_res, (casebase, query) in zip(prev_responses, batches, strict=True):
+        all_combinations = itertools.combinations(casebase.keys(), 2)
+        predicted_combinations = [
+            (entry.winner_id, entry.loser_id) for entry in prev_res.preferences
+        ]
+        missing_combinations = set(all_combinations) - set(predicted_combinations)
+        missing_keys = {key[0] for key in missing_combinations} | {
+            key[1] for key in missing_combinations
+        }
+
+        if len(missing_keys) > max_cases:
+            missing_keys = dict(random.sample(list(casebase.items()), max_cases))
+
+        pairwise_batches = {
+            (case1, case2): (
+                {"a": casebase[case1], "b": casebase[case2]},
+                query,
+                None,
+            )
+            for case1, case2 in missing_combinations
+            if case1 in missing_keys and case2 in missing_keys
+        }
+        pairwise_responses = cbrkit.synthesis.apply_batches(
+            pairwise_batches,
+            synthesis_func,
+        )
+        pairwise_preferences: list[SynthesisPreference] = []
+
+        for (case1, case2), result in pairwise_responses.queries.items():
+            if result.response.strip().lower() == "a":
+                pairwise_preferences.append(
+                    SynthesisPreference(winner_id=case1, loser_id=case2)
+                )
+            elif result.response.strip().lower() == "b":
+                pairwise_preferences.append(
+                    SynthesisPreference(winner_id=case2, loser_id=case1)
+                )
+            else:
+                logger.info(
+                    f"Got '{result.response.strip().lower()}' for ({case1},{case2})"
+                )
+
+        responses.append(
+            SynthesisResponse(preferences=prev_res.preferences + pairwise_preferences)
+        )
+
+    return responses
+
+
 def request[V](
     provider: Provider,
     batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
@@ -86,20 +154,33 @@ def request[V](
 ) -> Sequence[SynthesisResponse]:
     generation_func = provider.build(SynthesisResponse)
     requests: list[str | None] = []
+    # TODO: Add numeric casebase support
+    numeric_batches: list[tuple[cbrkit.typing.Casebase[str, V], V]] = []
+    batches_lookup: list[dict[str, str]] = []
 
-    for res, (casebase, query) in zip(prev_responses, batches, strict=True):
-        if len(casebase) > max_cases:
-            sampled_cases = random.sample(list(casebase.items()), max_cases)
-            casebase = dict(sampled_cases)
+    for casebase, query in batches:
+        numeric_casebase: cbrkit.typing.Casebase[str, V] = {}
+        lookup: dict[str, str] = {}
+        for i, (key, value) in enumerate(casebase.items(), start=1):
+            numeric_casebase[str(i)] = value
+            lookup[str(i)] = key
+        numeric_batches.append((numeric_casebase, query))
+        batches_lookup.append(lookup)
 
+    for prev_res, (casebase, query) in zip(
+        prev_responses, numeric_batches, strict=True
+    ):
         all_combinations = itertools.combinations(casebase.keys(), 2)
         predicted_combinations = [
-            (entry.winner_id, entry.loser_id) for entry in res.preferences
+            (entry.winner_id, entry.loser_id) for entry in prev_res.preferences
         ]
         missing_combinations = set(all_combinations) - set(predicted_combinations)
         missing_keys = {key[0] for key in missing_combinations} | {
             key[1] for key in missing_combinations
         }
+
+        if len(missing_keys) > max_cases:
+            missing_keys = dict(random.sample(list(casebase.items()), max_cases))
 
         if missing_combinations:
             requests.append(
@@ -107,11 +188,7 @@ def request[V](
                     [
                         prompt_combinations(list(missing_combinations)),
                         cbrkit.synthesis.prompts.default()(
-                            {
-                                key: value
-                                for key, value in casebase.items()
-                                if key in missing_keys
-                            },
+                            {key: casebase[key] for key in missing_keys},
                             query,
                             None,
                         ),
@@ -124,18 +201,38 @@ def request[V](
     next_responses_raw = generation_func(
         [batch for batch in requests if batch is not None]
     )
-    next_responses = [
+    next_responses_numeric = [
         next_responses_raw[i]
         if batch is not None
         else SynthesisResponse(preferences=[])
         for i, batch in enumerate(requests)
     ]
+    next_responses: list[SynthesisResponse] = []
+
+    for next_res, lookup in zip(next_responses_numeric, batches_lookup, strict=True):
+        new_preferences: list[SynthesisPreference] = []
+        inverse_lookup = {v: k for k, v in lookup.items()}
+
+        for entry in next_res.preferences:
+            if entry.winner_id not in inverse_lookup:
+                logger.error(f"KeyError: {entry.winner_id}")
+            if entry.loser_id not in inverse_lookup:
+                logger.error(f"KeyError: {entry.loser_id}")
+
+            if (winner := inverse_lookup.get(entry.winner_id)) and (
+                loser := inverse_lookup.get(entry.loser_id)
+            ):
+                new_preferences.append(
+                    SynthesisPreference(winner_id=winner, loser_id=loser)
+                )
+
+        next_responses.append(SynthesisResponse(preferences=new_preferences))
 
     return [
         SynthesisResponse(
-            preferences=response.preferences + retried_response.preferences
+            preferences=prev_response.preferences + next_response.preferences
         )
-        for response, retried_response in zip(
+        for prev_response, next_response in zip(
             prev_responses, next_responses, strict=True
         )
     ]

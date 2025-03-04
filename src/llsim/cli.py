@@ -24,11 +24,14 @@ def load_cases(
     raise ValueError("Invalid path or pattern")
 
 
-def load_domain(name: str) -> tuple[str, Path, str | None, Path | None, str | None]:
+def load_domain(
+    name: str,
+) -> tuple[str, str, Path, str | None, Path | None, str | None]:
     match name:
         case "recipes":
             return (
                 "llsim.recipes:load",
+                "llsim.recipes.RETRIEVER",
                 Path("data/cases/recipes.json"),
                 None,
                 None,
@@ -37,6 +40,7 @@ def load_domain(name: str) -> tuple[str, Path, str | None, Path | None, str | No
         case "cars":
             return (
                 "llsim.cars:load",
+                "llsim.cars.RETRIEVER",
                 Path("data/cases/cars.json"),
                 None,
                 None,
@@ -45,6 +49,7 @@ def load_domain(name: str) -> tuple[str, Path, str | None, Path | None, str | No
         case "arguments":
             return (
                 "llsim.arguments:load",
+                "llsim.arguments.RETRIEVERS",
                 Path("data/cases/arguments"),
                 "*.json",
                 Path("data/cases/arguments"),
@@ -59,7 +64,7 @@ def build_preferences(
     out: Annotated[Path, Option()],
     model: Annotated[str, Option()],
     query_name: Annotated[list[str], Option(default_factory=list)],
-    tries: Annotated[int, Option()] = 1,
+    tries: Annotated[int, Option()] = 3,
     infer_missing: Annotated[bool, Option()] = True,
     max_cases: Annotated[int, Option()] = 100,
     queries: Annotated[Path | None, Option()] = None,
@@ -68,9 +73,10 @@ def build_preferences(
     cases: Path | None = None,
     cases_pattern: str | None = None,
     queries_pattern: str | None = None,
+    pairwise: bool = False,
 ):
     if domain is not None:
-        loader, cases, cases_pattern, queries, queries_pattern = load_domain(domain)
+        loader, _, cases, cases_pattern, queries, queries_pattern = load_domain(domain)
 
     assert loader is not None, "loader is required"
     assert cases is not None, "cases is required"
@@ -93,9 +99,15 @@ def build_preferences(
     batches = [(_cases, query) for query in _queries.values()]
 
     responses = [preferences.SynthesisResponse(preferences=[]) for _ in batches]
+    provider = Provider(model)
 
     for _ in range(tries):
-        responses = preferences.request(Provider(model), batches, responses, max_cases)
+        if pairwise:
+            responses = preferences.request_pairwise(
+                provider, batches, responses, max_cases
+            )
+        else:
+            responses = preferences.request(provider, batches, responses, max_cases)
 
         if infer_missing:
             responses = preferences.infer_missing(batches, responses)
@@ -116,7 +128,10 @@ def build_similarity(
     attribute_table: str | None = None,
 ):
     if domain is not None:
-        loader, cases, cases_pattern, _, _ = load_domain(domain)
+        loader, _, cases, cases_pattern, _, _ = load_domain(domain)
+
+        if domain == "recipes":
+            attribute_table = "type"
 
     assert loader is not None, "loader is required"
     assert cases is not None, "cases is required"
@@ -134,10 +149,10 @@ def build_similarity(
 
 @app.command()
 def retrieve(
-    retriever: Annotated[str, Option()],
     out: Annotated[Path, Option()],
     retriever_arg: Annotated[list[str], Option(default_factory=dict)],
     query_name: Annotated[list[str], Option(default_factory=list)],
+    retriever: str | None = None,
     domain: str | None = None,
     loader: str | None = None,
     cases: Path | None = None,
@@ -145,11 +160,18 @@ def retrieve(
     cases_pattern: str | None = None,
     queries_pattern: str | None = None,
 ):
+    baseline_retriever: str | None = None
     if domain is not None:
-        loader, cases, cases_pattern, queries, queries_pattern = load_domain(domain)
+        loader, baseline_retriever, cases, cases_pattern, queries, queries_pattern = (
+            load_domain(domain)
+        )
+
+    if retriever is None and baseline_retriever is not None:
+        retriever = baseline_retriever
 
     assert loader is not None, "loader is required"
     assert cases is not None, "cases is required"
+    assert retriever is not None, "retriever is required"
 
     retriever_kwargs: dict[str, str] = {}
 
@@ -235,7 +257,7 @@ def evaluate_run(
     baseline_sims = normalize_similarities(baseline)
 
     for run_path in run_paths:
-        if run_path == baseline_path:
+        if run_path == baseline_path or run_path.stem.endswith("-config"):
             continue
 
         with run_path.open("r") as fp:
@@ -256,6 +278,7 @@ def evaluate_run(
             },
         )
         metrics[run_path.stem].update(cast(dict[str, float], error_metrics))
+        metrics[run_path.stem]["duration"] = run.final_step.duration
 
     print_metrics(metrics)
 
@@ -270,7 +293,7 @@ def evaluate_qrels(
     queries_pattern: str | None = None,
 ):
     if domain is not None:
-        loader, _, _, queries, queries_pattern = load_domain(domain)
+        loader, _, _, _, queries, queries_pattern = load_domain(domain)
 
     assert loader is not None, "loader is required"
     assert queries is not None, "queries is required"
@@ -285,6 +308,9 @@ def evaluate_qrels(
     metrics: dict[str, dict[str, float]] = {}
 
     for run_path in run_paths:
+        if run_path.stem.endswith("-config"):
+            continue
+
         with run_path.open("r") as fp:
             run = cbrkit.model.Result.model_validate(json.load(fp))
 
@@ -293,6 +319,7 @@ def evaluate_qrels(
             run.final_step,
             metrics=cbrkit.eval.generate_metrics(ks=k),
         )
+        metrics[run_path.stem]["duration"] = run.final_step.duration
 
     print_metrics(metrics)
 

@@ -49,21 +49,41 @@ class Retriever[R: BaseModel, V]:
         batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
     ) -> Sequence[Mapping[str, float]]:
         func = cbrkit.synthesis.transpose(self.synthesis_func, self.conversion_func)
+        numeric_batches: list[tuple[cbrkit.typing.Casebase[str, V], V, None]] = []
+        batches_lookup: list[dict[str, str]] = []
 
-        raw_sims = func([(casebase, query, None) for casebase, query in batches])
+        for casebase, query in batches:
+            numeric_casebase: cbrkit.typing.Casebase[str, V] = {}
+            lookup: dict[str, str] = {}
+
+            for i, (key, value) in enumerate(casebase.items(), start=1):
+                numeric_casebase[str(i)] = value
+                lookup[str(i)] = key
+
+            numeric_batches.append((numeric_casebase, query, None))
+            batches_lookup.append(lookup)
+
+        raw_sims = func(numeric_batches)
         parsed_sims: list[dict[str, float]] = []
 
-        for raw_sim, (casebase, _) in zip(raw_sims, batches, strict=True):
+        for raw_sim, (casebase, _), lookup in zip(
+            raw_sims, batches, batches_lookup, strict=True
+        ):
             parsed_sim: dict[str, float] = {}
+            inverse_lookup = {v: k for k, v in lookup.items()}
 
             for key in casebase.keys():
-                if sim := raw_sim.get(key):
+                numeric_key = inverse_lookup[key]
+
+                if sim := raw_sim.get(numeric_key):
                     parsed_sim[key] = sim
                 else:
                     logger.info(f"Key {key} not in response")
 
-            for key in raw_sim.keys():
-                if key not in casebase:
+            for numeric_key in raw_sim.keys():
+                key = lookup.get(numeric_key)
+
+                if key is None or key not in casebase:
                     logger.info(f"Key {key} not in casebase")
 
             parsed_sims.append(parsed_sim)
@@ -80,7 +100,7 @@ def Synthesizer[T: BaseModel](
         system_message=(
             "You are a helpful assistant with the following task: "
             "Given a list of documents and a query, generate a ranking of the documents with respect to the query. "
-            "It should include all the documents in the list and must not include IDs that were not provided. "
+            "It should include **all** the documents in the list and must not include IDs that were not provided. "
             "The IDs are given as markdown headings. "
         ),
     )

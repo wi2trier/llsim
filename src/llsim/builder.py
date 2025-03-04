@@ -73,7 +73,8 @@ def measure_lookup[T](
 
 
 NumberMeasure = (
-    cbrkit.sim.numbers.exponential
+    cbrkit.sim.generic.equality
+    | cbrkit.sim.numbers.exponential
     | cbrkit.sim.numbers.linear_interval
     | cbrkit.sim.numbers.sigmoid
     | cbrkit.sim.numbers.threshold
@@ -81,14 +82,15 @@ NumberMeasure = (
 )
 
 StringMeasure = (
-    embedding
+    cbrkit.sim.generic.equality
+    | embedding
     | table
     | cbrkit.sim.strings.glob
     | cbrkit.sim.strings.jaro
     | cbrkit.sim.strings.jaro_winkler
     | cbrkit.sim.strings.levenshtein
-    # | cbrkit.sim.strings.ngram # tokenizer cannot be handled by pydantic
     | cbrkit.sim.strings.regex
+    # | cbrkit.sim.strings.ngram # tokenizer cannot be handled by pydantic
 )
 
 
