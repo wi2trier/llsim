@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 from functools import partial
+import instructor
 
 import cbrkit
 import httpx
@@ -27,6 +28,7 @@ openrouter_client = AsyncOpenAI(
         limits=httpx.Limits(max_connections=50, max_keepalive_connections=25),
     ),
 )
+instructor_client = instructor.from_openai(openrouter_client, mode=instructor.Mode.JSON)
 
 
 @dataclass(slots=True, frozen=True)
@@ -53,6 +55,34 @@ class Provider[T: BaseModel]:
             system_message=system_message,
             default_response=default_response,
         )
+        fireworks_provider = partial(
+            cbrkit.synthesis.providers.openai,
+            client=openrouter_client,
+            response_type=response_type,
+            system_message=system_message,
+            default_response=default_response,
+            extra_body={
+                "provider": {
+                    "order": ["Fireworks"],
+                    "allow_fallbacks": False,
+                    "require_parameters": True,
+                },
+            },
+        )
+        instructor_provider = partial(
+            cbrkit.synthesis.providers.instructor,
+            client=instructor_client,
+            response_type=response_type,
+            system_message=system_message,
+            default_response=default_response,
+            extra_kwargs={
+                "extra_body": {
+                    "provider": {
+                        "require_parameters": True,
+                    },
+                },
+            },
+        )
 
         match self.name:
             case "o1":
@@ -60,7 +90,7 @@ class Provider[T: BaseModel]:
                     model="o1-2024-12-17",
                     reasoning_effort="high",
                 )
-            case "o3-mini-high":
+            case "o3-mini":
                 return openai_provider(
                     model="o3-mini-2025-01-31",
                     reasoning_effort="high",
@@ -71,38 +101,74 @@ class Provider[T: BaseModel]:
                 return openai_provider(model="gpt-4o-mini-2024-07-18")
 
             case "gemini-flash":
-                return openrouter_provider(model="google/gemini-2.0-flash-001")
+                return openrouter_provider(
+                    model="google/gemini-2.0-flash-001",
+                    max_completion_tokens=3,
+                )
             case "gemini-flash-lite":
                 return openrouter_provider(model="google/gemini-2.0-flash-lite-001")
 
             case "llama-405b":
-                return openrouter_provider(
-                    model="meta-llama/llama-3.1-405b-instruct",
-                    tool_choice=response_type,
-                    system_message=(system_message or "") + "\nRespond with JSON.",
-                )
+                return fireworks_provider(model="meta-llama/llama-3.1-405b-instruct")
             case "llama-70b":
-                return openrouter_provider(
+                return instructor_provider(
                     model="meta-llama/llama-3.3-70b-instruct",
-                    tool_choice=response_type,
-                    system_message=(system_message or "") + "\nRespond with JSON.",
+                    # system_message=(system_message or "") + "\nRespond with JSON.",
                 )
+            # case "llama-70b":
+            #     return openrouter_provider(
+            #         model="meta-llama/llama-3.3-70b-instruct",
+            #         tool_choice=response_type,
+            #         system_message=(system_message or "") + "\nRespond with JSON.",
+            #     )
             case "llama-8b":
-                return openrouter_provider(model="meta-llama/llama-3.1-8b-instruct")
+                return openrouter_provider(
+                    model="meta-llama/llama-3.1-8b-instruct",
+                    max_completion_tokens=3,
+                )
             case "llama-3b":
-                return openrouter_provider(model="meta-llama/llama-3.2-3b-instruct")
+                return openrouter_provider(
+                    model="meta-llama/llama-3.2-3b-instruct",
+                    max_completion_tokens=3,
+                )
 
             case "qwen-turbo":
-                return openrouter_provider(model="qwen/qwen-turbo")
+                return openrouter_provider(
+                    model="qwen/qwen-turbo",
+                    max_completion_tokens=3,
+                )
             case "qwen-plus":
-                return openrouter_provider(model="qwen/qwen-plus")
+                return instructor_provider(model="qwen/qwen-plus")
             case "qwen-max":
-                return openrouter_provider(model="qwen/qwen-max")
+                return instructor_provider(model="qwen/qwen-max")
+            case "qwen-72b":
+                return instructor_provider(model="qwen/qwen-2.5-72b-instruct")
+            case "qwen-7b":
+                return openrouter_provider(
+                    model="qwen/qwen-2.5-7b-instruct",
+                    max_completion_tokens=3,
+                )
 
             case "deepseek-r1":
-                return openrouter_provider(model="deepseek/deepseek-r1")
+                return fireworks_provider(model="deepseek/deepseek-r1")
             case "deepseek-v3":
-                return openrouter_provider(model="deepseek/deepseek-chat")
+                return fireworks_provider(model="deepseek/deepseek-chat")
+
+            case "command-r-7b":
+                return openrouter_provider(
+                    model="cohere/command-r7b-12-2024",
+                    max_completion_tokens=3,
+                )
+            case "command-r":
+                return instructor_provider(
+                    model="cohere/command-r-08-2024",
+                    # system_message=(system_message or "") + "\nRespond with JSON.",
+                )
+            case "command-r-plus":
+                return instructor_provider(
+                    model="cohere/command-r-plus-08-2024",
+                    # system_message=(system_message or "") + "\nRespond with JSON.",
+                )
 
             case "claude-thinking":
                 return openrouter_provider(model="anthropic/claude-3.7-sonnet:thinking")

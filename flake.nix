@@ -32,30 +32,40 @@
             "recipes"
             "arguments"
           ];
-          reasoningModels = [
-            "o1"
-            "o3-mini"
-            "deepseek-r1"
-            "claude-thinking"
-          ];
+          # 0.3 <= x < 3
           largeModels = [
-            "4o"
-            "claude"
-            "llama-405b"
-            "qwen-max"
-            "deepseek-v3"
+            "4o" # $2.5/M input tokens, https://openrouter.ai/openai/gpt-4o
+            "o3-mini" # $1.1/M input tokens, https://openrouter.ai/openai/o3-mini
+            "deepseek-v3" # $0.9/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
+            "deepseek-r1" # $3/M input tokens, https://openrouter.ai/deepseek/deepseek-r1
+            "llama-405b" # $3/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-405b-instruct
+            # "command-r-plus" # $2.375/M input tokens, https://openrouter.ai/cohere/command-r-plus-08-2024
+            # "nova-pro" # $0.8/M input tokens, https://openrouter.ai/amazon/nova-pro-v1
+            # "qwen-max" # $1.6/M input tokens, https://openrouter.ai/qwen/qwen-max
+            # "claude" # $3/M input tokens, https://openrouter.ai/anthropic/claude-3.7-sonnet
+            # "claude-thinking" # $3/M input tokens, https://openrouter.ai/anthropic/claude-3.7-sonnet:thinking
+            # "o1" # $15/M input tokens, https://openrouter.ai/openai/o1
           ];
+          # 0.1 <= x < 0.3 (smaller models bad at function calling, larger models too expensive)
+          mediumModels = [
+            "4o-mini" # $0.15/M input tokens, https://openrouter.ai/openai/gpt-4o-mini
+            "gemini-flash" # $0.1/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-001
+            # "llama-70b" # $0.12/M input tokens, https://openrouter.ai/meta-llama/llama-3.3-70b-instruct
+            # "command-r" # $0.1425/M input tokens, https://openrouter.ai/cohere/command-r-08-2024
+            # "qwen-72b" # $0.13/M input tokens, https://openrouter.ai/qwen/qwen-2.5-72b-instruct
+            # "qwen-plus" # $0.4/M input tokens, https://openrouter.ai/qwen/qwen-plus
+            # "gemini-flash-lite" # $0.075/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-lite-001
+            # "qwen-turbo" # $0.05/M input tokens, https://openrouter.ai/qwen/qwen-turbo
+            # "nova-lite" # $0.06/M input tokens, https://openrouter.ai/amazon/nova-lite-v1
+          ];
+          # 0.01 <= x < 0.03 (larger models too expensive)
           smallModels = [
-            "4o-mini"
-            "gemini-flash"
-            "qwen-plus"
-            "llama-70b"
-          ];
-          tinyModels = [
-            "gemini-flash-lite"
-            "qwen-turbo"
-            "llama-8b"
-            "llama-3b"
+            "llama-8b" # $0.02/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-8b-instruct
+            "qwen-7b" # $0.025/M input tokens, https://openrouter.ai/qwen/qwen-2.5-7b-instruct
+            # "llama-3b" # $0.015/M input tokens, https://openrouter.ai/meta-llama/llama-3.2-3b-instruct
+            # "nova-micro" # $0.035/M input tokens, https://openrouter.ai/amazon/nova-micro-v1
+            # "gemma-9b" # $0.03/M input tokens, https://openrouter.ai/google/gemma-2-9b-it
+            # "command-r7b" # $0.0375/M input tokens, https://openrouter.ai/cohere/command-r7b-12-2024
           ];
           mkEval =
             {
@@ -99,7 +109,7 @@
                   "llsim.plain:SIM_RETRIEVER"
                   "llsim.plain:RANK_RETRIEVER"
                 ];
-                model = smallModels;
+                model = mediumModels;
               };
               mkCombination = attrs: ''
                 uv run llsim retrieve "$@" \
@@ -107,11 +117,11 @@
                   --out "data/output/${attrs.domain}/${getPythonName attrs.retriever}-${attrs.model}.json"
               '';
             };
-            build-preferences-small = mkEval {
-              name = "build-preferences-small";
+            build-preferences-medium = mkEval {
+              name = "build-preferences-medium";
               combinations = lib.cartesianProduct {
                 domain = allDomains;
-                model = smallModels;
+                model = mediumModels;
               };
               mkCombination = attrs: ''
                 uv run llsim build-preferences "$@" \
@@ -119,11 +129,11 @@
                   --out "data/output/${attrs.domain}/preferences-${attrs.model}.json"
               '';
             };
-            build-preferences-tiny = mkEval {
-              name = "build-preferences-tiny";
+            build-preferences-small = mkEval {
+              name = "build-preferences-small";
               combinations = lib.cartesianProduct {
                 domain = allDomains;
-                model = tinyModels;
+                model = smallModels;
               };
               mkCombination = attrs: ''
                 uv run llsim build-preferences "$@" \
@@ -136,7 +146,7 @@
               name = "retrieve-centrality";
               combinations = lib.cartesianProduct {
                 domain = allDomains;
-                model = smallModels ++ tinyModels;
+                model = mediumModels ++ smallModels;
               };
               mkCombination = attrs: ''
                 uv run llsim retrieve "$@" \
@@ -151,7 +161,7 @@
               name = "build-similarity";
               combinations = lib.cartesianProduct {
                 domain = allDomains;
-                model = reasoningModels ++ largeModels;
+                model = largeModels;
               };
               mkCombination = attrs: ''
                 uv run llsim build-similarity "$@" \
@@ -163,7 +173,7 @@
               name = "retrieve-builder";
               combinations = lib.cartesianProduct {
                 domain = allDomains;
-                model = reasoningModels ++ largeModels;
+                model = largeModels;
               };
               mkCombination = attrs: ''
                 uv run llsim retrieve "$@" \
