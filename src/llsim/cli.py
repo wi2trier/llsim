@@ -66,7 +66,7 @@ def build_preferences(
     query_name: Annotated[list[str], Option(default_factory=list)],
     tries: Annotated[int, Option()] = 3,
     infer_missing: Annotated[bool, Option()] = True,
-    max_cases: Annotated[int, Option()] = 100,
+    max_cases: Annotated[float, Option()] = 100,
     queries: Annotated[Path | None, Option()] = None,
     domain: str | None = None,
     loader: str | None = None,

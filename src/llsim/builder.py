@@ -6,7 +6,7 @@ from types import UnionType
 from typing import Any, TypedDict, Union, cast, get_args, get_origin
 
 import cbrkit
-from pydantic import BaseModel
+from pydantic import BaseModel, OnErrorOmit
 
 from llsim.provider import Provider
 
@@ -41,7 +41,7 @@ class TableEntry(BaseModel):
 
 @dataclass(slots=True)
 class table:
-    entries: list[TableEntry]
+    entries: list[OnErrorOmit[TableEntry]]
     symmetric: bool
     default: float
     __doc__ = cbrkit.sim.table.__doc__

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import cbrkit
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, OnErrorOmit
 
 from llsim.provider import Provider
 
@@ -22,11 +22,11 @@ class SimModelEntry(BaseModel):
 
 
 class SimModel(BaseModel):
-    similarities: list[SimModelEntry]
+    similarities: list[OnErrorOmit[SimModelEntry]]
 
 
 class RankModel(BaseModel):
-    ranking: list[str]
+    ranking: list[OnErrorOmit[str]]
 
 
 def from_sim_model[K](response: SimModel) -> dict[str, float]:
@@ -50,6 +50,7 @@ class Retriever[R: BaseModel, V]:
     ) -> Sequence[Mapping[str, float]]:
         func = cbrkit.synthesis.transpose(self.synthesis_func, self.conversion_func)
         numeric_batches: list[tuple[cbrkit.typing.Casebase[str, V], V, None]] = []
+        # numeric -> string
         batches_lookup: list[dict[str, str]] = []
 
         for casebase, query in batches:
@@ -70,6 +71,7 @@ class Retriever[R: BaseModel, V]:
             raw_sims, batches, batches_lookup, strict=True
         ):
             parsed_sim: dict[str, float] = {}
+            # string -> numeric
             inverse_lookup = {v: k for k, v in lookup.items()}
 
             for key in casebase.keys():
