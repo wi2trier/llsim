@@ -215,7 +215,7 @@ def build_part(
             configurations[name] = SerializedConfigEntry(
                 name=response.__class__.__name__,
                 kind=kind,
-                kwargs=response.model_dump(),
+                kwargs=response.value.model_dump(),
             )
 
     return configurations

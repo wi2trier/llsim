@@ -40,7 +40,7 @@ class Provider[T: BaseModel]:
         response_type: type[T],
         system_message: str | None = None,
         default_response: T | None = None,
-    ) -> cbrkit.typing.BatchConversionFunc[str, T]:
+    ) -> cbrkit.typing.BatchConversionFunc[str, cbrkit.synthesis.providers.Response[T]]:
         openai_provider = partial(
             cbrkit.synthesis.providers.openai,
             client=openai_client,

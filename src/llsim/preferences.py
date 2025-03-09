@@ -135,7 +135,7 @@ def request_pairwise[V](
 
         for (case1, case2), result in pairwise_responses.queries.items():
             parsed_result = (
-                result.response.strip()
+                result.response.value.strip()
                 .lower()
                 .replace("'", "")
                 .replace('"', "")
@@ -233,11 +233,11 @@ def request[V](
     ):
         new_preferences: list[SynthesisPreference] = []
 
-        for entry_numeric in next_res_numeric.preferences:
             if entry_numeric.winner_id not in lookup:
                 logger.error(f"KeyError: {entry_numeric.winner_id}")
             if entry_numeric.loser_id not in lookup:
                 logger.error(f"KeyError: {entry_numeric.loser_id}")
+        for entry_numeric in next_res_numeric.value.preferences:
 
             if (winner := lookup.get(entry_numeric.winner_id)) and (
                 loser := lookup.get(entry_numeric.loser_id)

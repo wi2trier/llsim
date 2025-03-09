@@ -30,12 +30,13 @@ class RankModel(BaseModel):
 
 
 def from_sim_model[K](response: SimModel) -> dict[str, float]:
-    return {entry.id: entry.similarity for entry in response.similarities}
+    return {entry.id: entry.sim for entry in response.value.similarities}
 
 
 def from_rank_model[K](response: RankModel) -> dict[str, float]:
     return {
-        key: 1.0 - i / len(response.ranking) for i, key in enumerate(response.ranking)
+        key: 1.0 - i / len(response.value.ranking)
+        for i, key in enumerate(response.value.ranking)
     }
 
 
