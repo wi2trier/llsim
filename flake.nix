@@ -19,7 +19,6 @@
           ...
         }:
         let
-          mkCli = lib.cli.toGNUCommandLineShell { };
           getPythonName =
             name:
             lib.pipe name [
@@ -36,9 +35,10 @@
           largeModels = [
             "4o" # $2.5/M input tokens, https://openrouter.ai/openai/gpt-4o
             "o3-mini" # $1.1/M input tokens, https://openrouter.ai/openai/o3-mini
-            "deepseek-v3" # $0.9/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
-            "deepseek-r1" # $3/M input tokens, https://openrouter.ai/deepseek/deepseek-r1
-            "llama-405b" # $3/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-405b-instruct
+            # "deepseek-v3" # $0.9/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
+            # "deepseek-r1" # $3/M input tokens, https://openrouter.ai/deepseek/deepseek-r1
+            # "llama-405b" # $3/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-405b-instruct
+            # the models below are not used for evaluation
             # "command-r-plus" # $2.375/M input tokens, https://openrouter.ai/cohere/command-r-plus-08-2024
             # "nova-pro" # $0.8/M input tokens, https://openrouter.ai/amazon/nova-pro-v1
             # "qwen-max" # $1.6/M input tokens, https://openrouter.ai/qwen/qwen-max
@@ -49,7 +49,8 @@
           # 0.1 <= x < 0.3 (smaller models bad at function calling, larger models too expensive)
           mediumModels = [
             "4o-mini" # $0.15/M input tokens, https://openrouter.ai/openai/gpt-4o-mini
-            "gemini-flash" # $0.1/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-001
+            # "gemini-flash" # $0.1/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-001
+            # the models below are not used for evaluation
             # "llama-70b" # $0.12/M input tokens, https://openrouter.ai/meta-llama/llama-3.3-70b-instruct
             # "command-r" # $0.1425/M input tokens, https://openrouter.ai/cohere/command-r-08-2024
             # "qwen-72b" # $0.13/M input tokens, https://openrouter.ai/qwen/qwen-2.5-72b-instruct
@@ -62,6 +63,7 @@
           smallModels = [
             "llama-8b" # $0.02/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-8b-instruct
             "qwen-7b" # $0.025/M input tokens, https://openrouter.ai/qwen/qwen-2.5-7b-instruct
+            # the models below are not used for evaluation
             # "llama-3b" # $0.015/M input tokens, https://openrouter.ai/meta-llama/llama-3.2-3b-instruct
             # "nova-micro" # $0.035/M input tokens, https://openrouter.ai/amazon/nova-micro-v1
             # "gemma-9b" # $0.03/M input tokens, https://openrouter.ai/google/gemma-2-9b-it
@@ -73,6 +75,14 @@
               combinations,
               mkCombination,
             }:
+            let
+              patchedMkCombination = combination: ''
+                echo
+                ${mkCombination combination}
+                echo
+              '';
+
+            in
             pkgs.writeShellApplication {
               inherit name;
               runtimeInputs = with pkgs; [ uv ];
@@ -84,7 +94,7 @@
                 set -x # echo on
                 uv sync --all-extras --locked
 
-                ${lib.concatLines (map mkCombination combinations)}
+                ${lib.concatLines (map patchedMkCombination combinations)}
               '';
             };
         in
@@ -97,7 +107,7 @@
               };
               mkCombination = attrs: ''
                 uv run llsim retrieve "$@" \
-                  ${mkCli attrs} \
+                  --domain ${attrs.domain} \
                   --out "data/output/${attrs.domain}/baseline.json"
               '';
             };
@@ -106,14 +116,16 @@
               combinations = lib.cartesianProduct {
                 domain = allDomains;
                 retriever = [
-                  "llsim.plain:SIM_RETRIEVER"
-                  "llsim.plain:RANK_RETRIEVER"
+                  "llsim.plain:SimRetriever"
+                  "llsim.plain:RankRetriever"
                 ];
                 model = mediumModels;
               };
               mkCombination = attrs: ''
                 uv run llsim retrieve "$@" \
-                  ${mkCli attrs} \
+                  --domain ${attrs.domain} \
+                  --retriever ${attrs.retriever} \
+                  --retriever-arg model=${attrs.model} \
                   --out "data/output/${attrs.domain}/${getPythonName attrs.retriever}-${attrs.model}.json"
               '';
             };
@@ -125,8 +137,9 @@
               };
               mkCombination = attrs: ''
                 uv run llsim build-preferences "$@" \
-                  ${mkCli attrs} \
-                  --out "data/output/${attrs.domain}/preferences-${attrs.model}.json"
+                  --domain ${attrs.domain} \
+                  --model ${attrs.model} \
+                  --out "data/output/${attrs.domain}/preferences-${attrs.model}-config.json"
               '';
             };
             build-preferences-small = mkEval {
@@ -137,7 +150,8 @@
               };
               mkCombination = attrs: ''
                 uv run llsim build-preferences "$@" \
-                  ${mkCli attrs} \
+                  --domain ${attrs.domain} \
+                  --model ${attrs.model} \
                   --pairwise \
                   --out "data/output/${attrs.domain}/centrality-${attrs.model}-config.json"
               '';
@@ -160,19 +174,26 @@
             build-similarity = mkEval {
               name = "build-similarity";
               combinations = lib.cartesianProduct {
-                domain = allDomains;
+                domain = [
+                  "cars"
+                  "recipes"
+                ];
                 model = largeModels;
               };
               mkCombination = attrs: ''
                 uv run llsim build-similarity "$@" \
-                  ${mkCli attrs} \
+                  --domain ${attrs.domain} \
+                  --model ${attrs.model} \
                   --out "data/output/${attrs.domain}/builder-${attrs.model}-config.json"
               '';
             };
             retrieve-builder = mkEval {
               name = "retrieve-builder";
               combinations = lib.cartesianProduct {
-                domain = allDomains;
+                domain = [
+                  "cars"
+                  "recipes"
+                ];
                 model = largeModels;
               };
               mkCombination = attrs: ''
@@ -200,7 +221,7 @@
               };
               mkCombination = attrs: ''
                 uv run llsim evaluate-qrels "$@" \
-                  ${mkCli attrs} \
+                  --domain ${attrs.domain} \
                   "data/output/${attrs.domain}"
               '';
             };

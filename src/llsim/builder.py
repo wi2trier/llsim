@@ -3,10 +3,10 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import UnionType
-from typing import Any, TypedDict, Union, cast, get_args, get_origin
+from typing import Annotated, Any, TypedDict, Union, cast, get_args, get_origin
 
 import cbrkit
-from pydantic import BaseModel, OnErrorOmit
+from pydantic import BaseModel, Field, OnErrorOmit
 
 from llsim.provider import Provider
 
@@ -33,7 +33,12 @@ class embedding:
 class TableEntry(BaseModel):
     source: str
     target: str
-    similarity: float
+    similarity: Annotated[
+        float,
+        Field(
+            description="The similarity of the source and target. Must be between 0.0 and 1.0"
+        ),
+    ]
 
     def dump(self) -> tuple[str, str, float]:
         return self.source, self.target, self.similarity
@@ -195,6 +200,7 @@ def build_part(
             (
                 "Compute the similarity for the given documents by calling the most suitable tool with the correct arguments. "
                 "The response should be based on the presented values and not their keys/ids. "
+                "Make sure to **always** call exactly one of the provided tools. "
             ),
         )
 
@@ -209,13 +215,13 @@ def build_part(
             for name in names
         ]
 
-        responses = generation_func(requests)
+        responses = cbrkit.helpers.unpack_values(generation_func(requests))
 
         for name, response in zip(names, responses):
             configurations[name] = SerializedConfigEntry(
                 name=response.__class__.__name__,
                 kind=kind,
-                kwargs=response.value.model_dump(),
+                kwargs=response.model_dump(),
             )
 
     return configurations

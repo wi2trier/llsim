@@ -34,5 +34,5 @@ SIM: BatchSimFunc[Mapping[str, Any], cbrkit.typing.Float] = cbrkit.sim.attribute
 )
 
 
-def RETRIEVER():
+def Retriever():
     return cbrkit.retrieval.build(SIM, multiprocessing=False)

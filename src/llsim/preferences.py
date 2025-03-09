@@ -15,17 +15,17 @@ random.seed(42)
 logger = logging.getLogger(__name__)
 
 
-class SynthesisPreference(BaseModel):
-    winner_id: str
-    loser_id: str
+class Pref(BaseModel):
+    winner: str
+    loser: str
 
     @override
     def __str__(self) -> str:
-        return f"{self.winner_id} > {self.loser_id}"
+        return f"{self.winner} > {self.loser}"
 
 
-class SynthesisResponse(BaseModel):
-    preferences: list[OnErrorOmit[SynthesisPreference]]
+class Response(BaseModel):
+    preferences: list[OnErrorOmit[Pref]]
 
 
 def combinations2instructions(combinations: list[tuple[str, str]]) -> str:
@@ -38,50 +38,48 @@ def combinations2instructions(combinations: list[tuple[str, str]]) -> str:
 
 
 def preferences2graph[V](
-    res: SynthesisResponse, casebase: cbrkit.typing.Casebase[str, V]
+    res: Response, casebase: cbrkit.typing.Casebase[str, V]
 ) -> tuple[rustworkx.PyDiGraph[str, None], dict[str, int]]:
     g: rustworkx.PyDiGraph[str, None] = rustworkx.PyDiGraph()
 
     id_map = {key: g.add_node(key) for key in casebase.keys()}
 
     for entry in res.preferences:
-        if entry.winner_id not in id_map:
-            logger.error(f"KeyError: {entry.winner_id}")
-        if entry.loser_id not in id_map:
-            logger.error(f"KeyError: {entry.loser_id}")
+        if entry.winner not in id_map:
+            logger.error(f"KeyError: {entry.winner}")
+        if entry.loser not in id_map:
+            logger.error(f"KeyError: {entry.loser}")
 
-        if (winner_id := id_map.get(entry.winner_id)) and (
-            loser_id := id_map.get(entry.loser_id)
-        ):
-            g.add_edge(loser_id, winner_id, None)
+        if (winner := id_map.get(entry.winner)) and (loser := id_map.get(entry.loser)):
+            g.add_edge(loser, winner, None)
 
     return g, id_map
 
 
 def graph2preferences(
     g: rustworkx.PyDiGraph[str, None], id_map: dict[str, int]
-) -> SynthesisResponse:
+) -> Response:
     preferences = []
     id_map_inv = {v: k for k, v in id_map.items()}
 
     for node in g.node_indices():
         for successor in g.successor_indices(node):
             preferences.append(
-                SynthesisPreference(
-                    winner_id=id_map_inv[successor],
-                    loser_id=id_map_inv[node],
+                Pref(
+                    winner=id_map_inv[successor],
+                    loser=id_map_inv[node],
                 )
             )
 
-    return SynthesisResponse(preferences=preferences)
+    return Response(preferences=preferences)
 
 
 def get_missing_combinations(
-    all: Collection[str], prev: Collection[SynthesisPreference]
+    all: Collection[str], prev: Collection[Pref]
 ) -> set[tuple[str, str]]:
     all_combinations = itertools.combinations(all, 2)
-    predicted_combinations = [(entry.winner_id, entry.loser_id) for entry in prev] + [
-        (entry.loser_id, entry.winner_id) for entry in prev
+    predicted_combinations = [(entry.winner, entry.loser) for entry in prev] + [
+        (entry.loser, entry.winner) for entry in prev
     ]
     return set(all_combinations) - set(predicted_combinations)
 
@@ -89,9 +87,9 @@ def get_missing_combinations(
 def request_pairwise[V](
     provider: Provider,
     batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
-    prev_responses: Sequence[SynthesisResponse],
+    prev_responses: Sequence[Response],
     max_cases: float,
-) -> Sequence[SynthesisResponse]:
+) -> Sequence[Response]:
     generation_func = provider.build(
         str,
         system_message=(
@@ -104,7 +102,7 @@ def request_pairwise[V](
     synthesis_func = cbrkit.synthesis.build(
         generation_func, cbrkit.synthesis.prompts.default()
     )
-    responses: list[SynthesisResponse] = []
+    responses: list[Response] = []
 
     for prev_res, (casebase, query) in zip(prev_responses, batches, strict=True):
         missing_combinations = get_missing_combinations(
@@ -131,7 +129,7 @@ def request_pairwise[V](
             pairwise_batches,
             synthesis_func,
         )
-        pairwise_preferences: list[SynthesisPreference] = []
+        pairwise_preferences: list[Pref] = []
 
         for (case1, case2), result in pairwise_responses.queries.items():
             parsed_result = (
@@ -143,18 +141,14 @@ def request_pairwise[V](
             )
 
             if parsed_result == "first":
-                pairwise_preferences.append(
-                    SynthesisPreference(winner_id=case1, loser_id=case2)
-                )
+                pairwise_preferences.append(Pref(winner=case1, loser=case2))
             elif parsed_result == "second":
-                pairwise_preferences.append(
-                    SynthesisPreference(winner_id=case2, loser_id=case1)
-                )
+                pairwise_preferences.append(Pref(winner=case2, loser=case1))
             else:
                 logger.warning(f"Got '{parsed_result}' for ({case1},{case2})")
 
         responses.append(
-            SynthesisResponse(preferences=prev_res.preferences + pairwise_preferences)
+            Response(preferences=prev_res.preferences + pairwise_preferences)
         )
 
     return responses
@@ -163,15 +157,17 @@ def request_pairwise[V](
 def request[V](
     provider: Provider,
     batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
-    prev_responses: Sequence[SynthesisResponse],
+    prev_responses: Sequence[Response],
     max_cases: float,
-) -> Sequence[SynthesisResponse]:
+) -> Sequence[Response]:
     generation_func = provider.build(
-        SynthesisResponse,
+        Response,
         system_message=(
             "Given a list of documents and a query, generate preferences between the documents with respect to the query. "
             "The IDs are given as markdown headings. "
+            "Do not consider IDs found inside markdown code blocks such as node or edge names. "
         ),
+        default_response=Response(preferences=[]),
     )
     requests: list[str | None] = []
     numeric_batches: list[tuple[cbrkit.typing.Casebase[str, V], V]] = []
@@ -181,7 +177,7 @@ def request[V](
     for casebase, query in batches:
         numeric_casebase: cbrkit.typing.Casebase[str, V] = {}
         lookup: dict[str, str] = {}
-        for i, (key, value) in enumerate(casebase.items(), start=1):
+        for i, (key, value) in enumerate(casebase.items(), start=1000):
             numeric_casebase[str(i)] = value
             lookup[str(i)] = key
         numeric_batches.append((numeric_casebase, query))
@@ -223,35 +219,31 @@ def request[V](
     next_responses_numeric = [
         next_responses_numeric_raw[i]
         if req is not None
-        else SynthesisResponse(preferences=[])
+        else cbrkit.synthesis.providers.Response(Response(preferences=[]))
         for i, req in enumerate(requests)
     ]
-    next_responses: list[SynthesisResponse] = []
+    next_responses: list[Response] = []
 
     for next_res_numeric, lookup in zip(
         next_responses_numeric, batches_lookup, strict=True
     ):
-        new_preferences: list[SynthesisPreference] = []
+        new_preferences: list[Pref] = []
 
-            if entry_numeric.winner_id not in lookup:
-                logger.error(f"KeyError: {entry_numeric.winner_id}")
-            if entry_numeric.loser_id not in lookup:
-                logger.error(f"KeyError: {entry_numeric.loser_id}")
         for entry_numeric in next_res_numeric.value.preferences:
+            if entry_numeric.winner not in lookup:
+                logger.error(f"KeyError: {entry_numeric.winner}")
+            if entry_numeric.loser not in lookup:
+                logger.error(f"KeyError: {entry_numeric.loser}")
 
-            if (winner := lookup.get(entry_numeric.winner_id)) and (
-                loser := lookup.get(entry_numeric.loser_id)
+            if (winner := lookup.get(entry_numeric.winner)) and (
+                loser := lookup.get(entry_numeric.loser)
             ):
-                new_preferences.append(
-                    SynthesisPreference(winner_id=winner, loser_id=loser)
-                )
+                new_preferences.append(Pref(winner=winner, loser=loser))
 
-        next_responses.append(SynthesisResponse(preferences=new_preferences))
+        next_responses.append(Response(preferences=new_preferences))
 
     return [
-        SynthesisResponse(
-            preferences=prev_response.preferences + next_response.preferences
-        )
+        Response(preferences=prev_response.preferences + next_response.preferences)
         for prev_response, next_response in zip(
             prev_responses, next_responses, strict=True
         )
@@ -260,12 +252,12 @@ def request[V](
 
 def infer_missing[V](
     batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
-    prev_responses: Sequence[SynthesisResponse],
-) -> Sequence[SynthesisResponse]:
-    new_responses: list[SynthesisResponse] = []
+    prev_responses: Sequence[Response],
+) -> Sequence[Response]:
+    new_responses: list[Response] = []
 
     for prev_res, (casebase, _) in zip(prev_responses, batches, strict=True):
-        new_preferences: list[SynthesisPreference] = []
+        new_preferences: list[Pref] = []
         missing_combinations = get_missing_combinations(
             casebase.keys(), prev_res.preferences
         )
@@ -277,16 +269,12 @@ def infer_missing[V](
                     target_id := id_map.get(target)
                 ):
                     if rustworkx.has_path(g, source_id, target_id):
-                        new_preferences.append(
-                            SynthesisPreference(loser_id=source, winner_id=target)
-                        )
+                        new_preferences.append(Pref(loser=source, winner=target))
                     elif rustworkx.has_path(g, target_id, source_id):
-                        new_preferences.append(
-                            SynthesisPreference(loser_id=target, winner_id=source)
-                        )
+                        new_preferences.append(Pref(loser=target, winner=source))
 
         new_responses.append(
-            SynthesisResponse(preferences=prev_res.preferences + new_preferences)
+            Response(preferences=prev_res.preferences + new_preferences)
         )
 
     return new_responses

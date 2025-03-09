@@ -9,7 +9,7 @@ from typing import Callable
 import cbrkit
 import rustworkx
 
-from llsim.preferences import SynthesisResponse, preferences2graph
+from llsim.preferences import Response, preferences2graph
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +55,7 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, CentralitySim]):
         ]
 
         with open(self.file) as fp:
-            responses = [
-                SynthesisResponse.model_validate(entry) for entry in json.load(fp)
-            ]
+            responses = [Response.model_validate(entry) for entry in json.load(fp)]
 
         for res, (casebase, _) in zip(responses, batches, strict=True):
             g, id_map = preferences2graph(res, casebase)
@@ -71,7 +69,7 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, CentralitySim]):
                         preferences=[
                             str(entry)
                             for entry in res.preferences
-                            if entry.winner_id == key or entry.loser_id == key
+                            if entry.winner == key or entry.loser == key
                         ],
                     )
                     for key in casebase.keys()

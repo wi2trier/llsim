@@ -66,3 +66,9 @@ The similarity of the cases is calculated by the weighted average of the similar
 ```shell
 uv run llsim --help
 ```
+
+## Cost
+
+- `retrieve-plain`: ca. $2 (two retrievers!)
+- `build-preferences-medium`: ca. $2.5
+- `build-similarity`: ca. $0.5

@@ -31,7 +31,7 @@ def load_domain(
         case "recipes":
             return (
                 "llsim.recipes:load",
-                "llsim.recipes.RETRIEVER",
+                "llsim.recipes.Retriever",
                 Path("data/cases/recipes.json"),
                 None,
                 None,
@@ -40,7 +40,7 @@ def load_domain(
         case "cars":
             return (
                 "llsim.cars:load",
-                "llsim.cars.RETRIEVER",
+                "llsim.cars.Retriever",
                 Path("data/cases/cars.json"),
                 None,
                 None,
@@ -49,10 +49,10 @@ def load_domain(
         case "arguments":
             return (
                 "llsim.arguments:load",
-                "llsim.arguments.RETRIEVERS",
+                "llsim.arguments.Retrievers",
                 Path("data/cases/arguments"),
                 "*.json",
-                Path("data/cases/arguments"),
+                Path("data/queries/arguments"),
                 "*.json",
             )
 
@@ -64,7 +64,7 @@ def build_preferences(
     out: Annotated[Path, Option()],
     model: Annotated[str, Option()],
     query_name: Annotated[list[str], Option(default_factory=list)],
-    tries: Annotated[int, Option()] = 3,
+    retries: Annotated[int, Option()] = 1,
     infer_missing: Annotated[bool, Option()] = True,
     max_cases: Annotated[float, Option()] = 100,
     queries: Annotated[Path | None, Option()] = None,
@@ -98,10 +98,10 @@ def build_preferences(
 
     batches = [(_cases, query) for query in _queries.values()]
 
-    responses = [preferences.SynthesisResponse(preferences=[]) for _ in batches]
+    responses = [preferences.Response(preferences=[]) for _ in batches]
     provider = Provider(model)
 
-    for _ in range(tries):
+    for _ in range(retries + 1):
         if pairwise:
             responses = preferences.request_pairwise(
                 provider, batches, responses, max_cases
