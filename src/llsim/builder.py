@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import UnionType
 from typing import Annotated, Any, TypedDict, Union, cast, get_args, get_origin
@@ -227,24 +227,60 @@ def build_part(
     return configurations
 
 
-def Retriever(file: str):
-    with open(file) as fp:
-        measures: SerializedConfig | AttributeTableConfig = json.load(fp)
+@dataclass(slots=True, init=False)
+class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, cbrkit.typing.Float]):
+    sim_func: cbrkit.typing.AnySimFunc[V, cbrkit.typing.Float] = field(init=False)
 
-    if "table" in measures:
-        measures = cast(AttributeTableConfig, measures)
-        sim = cbrkit.sim.attribute_table(
-            {
-                value: AttributeValueSim(configs)
-                for value, configs in measures["table"].items()
-            },
-            measures["attribute"],
-        )
-    else:
-        measures = cast(SerializedConfig, measures)
-        sim = AttributeValueSim(measures)
+    def __init__(self, file: str):
+        with open(file) as fp:
+            measures: SerializedConfig | AttributeTableConfig = json.load(fp)
 
-    return cbrkit.retrieval.build(sim)
+        if "table" in measures:
+            measures = cast(AttributeTableConfig, measures)
+            self.sim_func = cbrkit.sim.attribute_table(
+                entries={
+                    value: AttributeValueSim(configs)
+                    for value, configs in measures["table"].items()
+                },
+                attribute=measures["attribute"],
+                default=cbrkit.sim.generic.static(0.0),
+            )
+        else:
+            measures = cast(SerializedConfig, measures)
+            self.sim_func = AttributeValueSim(measures)
+
+    def __call__(
+        self,
+        batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
+    ) -> Sequence[Mapping[str, cbrkit.typing.Float]]:
+        first_query = batches[0][1]
+
+        if isinstance(first_query, cbrkit.model.graph.Graph):
+            graph_batches = cast(
+                Sequence[
+                    tuple[
+                        cbrkit.typing.Casebase[str, cbrkit.model.graph.Graph],
+                        cbrkit.model.graph.Graph,
+                    ]
+                ],
+                batches,
+            )
+            sim_func = cbrkit.sim.graphs.astar.build(
+                past_cost_func=cbrkit.sim.graphs.astar.g1(self.sim_func),
+                future_cost_func=cbrkit.sim.graphs.astar.h3(self.sim_func),
+                selection_func=cbrkit.sim.graphs.astar.select3(
+                    cbrkit.sim.graphs.astar.h3(self.sim_func)
+                ),
+                init_func=cbrkit.sim.graphs.astar.init2(),
+                queue_limit=1,
+            )
+            retriever_func = cbrkit.retrieval.build(
+                sim_func, multiprocessing=True, chunksize=1
+            )
+
+            return retriever_func(graph_batches)
+
+        return cbrkit.retrieval.build(self.sim_func)(batches)
 
 
 def AttributeValueSim(configs: SerializedConfig):
@@ -260,4 +296,4 @@ def AttributeValueSim(configs: SerializedConfig):
         for name, config in configs.items()
     }
 
-    return cbrkit.sim.attribute_value(attribute_functions)
+    return cbrkit.sim.attribute_value(attribute_functions, default=0.0)
