@@ -205,17 +205,22 @@ def retrieve(
 
 
 def normalize_similarities(
-    result: cbrkit.model.Result[Any, Any, Any, float],
+    result_step: cbrkit.model.ResultStep[Any, Any, Any, cbrkit.typing.Float],
 ) -> dict[Any, dict[Any, float]]:
-    min_sim = min(result.final_step.similarities.values())
-    max_sim = max(result.final_step.similarities.values())
+    all_similarities = cbrkit.helpers.unpack_floats(
+        sim
+        for query in result_step.queries.values()
+        for sim in query.similarities.values()
+    )
+    min_sim = min(all_similarities)
+    max_sim = max(all_similarities)
 
     return {
         query: {
-            case: (sim - min_sim) / (max_sim - min_sim)
+            case: (cbrkit.helpers.unpack_float(sim) - min_sim) / (max_sim - min_sim)
             for case, sim in entry.similarities.items()
         }
-        for query, entry in result.final_step.queries.items()
+        for query, entry in result_step.queries.items()
     }
 
 
@@ -233,19 +238,21 @@ def print_metrics(metrics: dict[str, dict[str, float]]):
     print("\\bottomrule")
 
 
-# TODO: Add coverage (i.e., the number of results where the run actually contains the required values)
-
-
 @app.command()
 def evaluate_run(
     directory: Path,
     k: Annotated[list[int], Option(default_factory=list)],
     max_qrel: int | None = None,
     min_qrel: int = 0,
+    baseline_name: str = "baseline.json",
 ):
-    baseline_path = directory / "baseline.json"
+    baseline_path = directory / baseline_name
     run_paths = directory.glob("*.json")
     metric_funcs = cbrkit.eval.generate_metrics(ks=k + [None])
+    error_metric_funcs = {
+        "mse": mean_squared_error,
+        "mae": mean_absolute_error,
+    }
     metrics: dict[str, dict[str, float]] = {}
 
     with baseline_path.open("r") as fp:
@@ -254,7 +261,7 @@ def evaluate_run(
     baseline_qrels = cbrkit.eval.retrieval_step_to_qrels(
         baseline.final_step, max_qrel, min_qrel
     )
-    baseline_sims = normalize_similarities(baseline)
+    baseline_sims = normalize_similarities(baseline.final_step)
 
     for run_path in run_paths:
         if run_path == baseline_path or run_path.stem.endswith("-config"):
@@ -269,15 +276,18 @@ def evaluate_run(
             metrics=metric_funcs,
         )
 
-        error_metrics = cbrkit.eval.compute_score_metrics(
-            baseline_sims,
-            normalize_similarities(run),
-            {
-                "mse": mean_squared_error,
-                "mae": mean_absolute_error,
-            },
-        )
-        metrics[run_path.stem].update(cast(dict[str, float], error_metrics))
+        try:
+            error_metrics = cbrkit.eval.compute_score_metrics(
+                baseline_sims,
+                normalize_similarities(run.final_step),
+                error_metric_funcs,
+            )
+            metrics[run_path.stem].update(cast(dict[str, float], error_metrics))
+        except ValueError:
+            metrics[run_path.stem].update(
+                {metric: float("nan") for metric in error_metric_funcs.keys()}
+            )
+
         metrics[run_path.stem]["duration"] = run.final_step.duration
 
     print_metrics(metrics)

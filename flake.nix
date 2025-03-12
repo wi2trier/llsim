@@ -217,7 +217,7 @@
             evaluate-qrels = mkEval {
               name = "evaluate-qrels";
               combinations = lib.cartesianProduct {
-                domain = allDomains;
+                domain = [ "arguments" ];
               };
               mkCombination = attrs: ''
                 uv run llsim evaluate-qrels "$@" \
