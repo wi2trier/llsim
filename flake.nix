@@ -181,6 +181,11 @@
                 uv run llsim build-similarity "$@" \
                   --domain ${attrs.domain} \
                   --model ${attrs.model} \
+                  ${
+                    lib.optionalString (
+                      attrs.domain == "arguments" || attrs.domain == "recipes"
+                    ) "--attribute-table type"
+                  } \
                   --out "data/output/${attrs.domain}/builder-${attrs.model}-config.json"
               '';
             };

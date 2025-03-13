@@ -130,9 +130,6 @@ def build_similarity(
     if domain is not None:
         loader, _, cases, cases_pattern, _, _ = load_domain(domain)
 
-        if domain == "recipes":
-            attribute_table = "type"
-
     assert loader is not None, "loader is required"
     assert cases is not None, "cases is required"
 
