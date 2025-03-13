@@ -3,7 +3,16 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import UnionType
-from typing import Annotated, Any, TypedDict, Union, cast, get_args, get_origin
+from typing import (
+    Annotated,
+    Any,
+    Literal,
+    TypedDict,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+)
 
 import cbrkit
 from pydantic import BaseModel, Field, OnErrorOmit
@@ -17,13 +26,73 @@ type SimFuncGenerator[T] = Callable[
 
 @dataclass(slots=True)
 class embedding:
-    model: str
-    __doc__ = cbrkit.sim.embed.sentence_transformers.__doc__
+    model: Literal["text-embedding-3-small", "text-embedding-3-large"]
+    __doc__ = cbrkit.sim.embed.openai.__doc__
     func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
 
     def __post_init__(self):
-        self.func = cbrkit.sim.embed.build(
-            cbrkit.sim.embed.sentence_transformers(self.model)
+        self.func = cbrkit.sim.embed.build(cbrkit.sim.embed.openai(self.model))
+
+    def __call__(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
+
+
+@dataclass(slots=True)
+class ngram:
+    n: int
+    case_sensitive: bool
+    __doc__ = cbrkit.sim.strings.ngram.__doc__
+    func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
+
+    def __post_init__(self):
+        self.func = cbrkit.sim.strings.ngram(self.n, case_sensitive=self.case_sensitive)
+
+    def __call__(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
+
+
+class TaxonomyNode(BaseModel):
+    name: str
+    children: list[OnErrorOmit["TaxonomyNode"]]
+
+
+TaxonomyNode.model_rebuild()
+
+type TaxonomyDistanceFunc = Literal["wu_palmer", "paths", "levels", "weights"]
+
+taxonomy_distance_functions: dict[
+    TaxonomyDistanceFunc, cbrkit.sim.taxonomy.TaxonomySimFunc
+] = {
+    "wu_palmer": cbrkit.sim.taxonomy.wu_palmer(),
+    "paths": cbrkit.sim.taxonomy.paths(),
+    "levels": cbrkit.sim.taxonomy.levels(strategy="average"),
+    "weights": cbrkit.sim.taxonomy.weights(strategy="average", source="auto"),
+}
+
+
+@dataclass(slots=True)
+class taxonomy:
+    root_node: TaxonomyNode = field(
+        metadata={
+            "description": (
+                "The root node of the taxonomy. "
+                "Its children cannot be empty, instead the taxonomy must be a tree with more than one node."
+            )
+        }
+    )
+    distance_function: TaxonomyDistanceFunc
+    __doc__ = cbrkit.sim.taxonomy.Taxonomy.__doc__
+    func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
+
+    def __post_init__(self):
+        taxonomy = cbrkit.sim.taxonomy.SerializedTaxonomyNode.model_validate(
+            self.root_node.model_dump
+            if isinstance(self.root_node, TaxonomyNode)
+            else self.root_node
+        )
+        self.func = cbrkit.sim.taxonomy.build(
+            taxonomy,
+            taxonomy_distance_functions[self.distance_function],
         )
 
     def __call__(self, *args, **kwargs):
@@ -90,12 +159,11 @@ StringMeasure = (
     cbrkit.sim.generic.equality
     | embedding
     | table
-    | cbrkit.sim.strings.glob
+    | taxonomy
+    | ngram
     | cbrkit.sim.strings.jaro
     | cbrkit.sim.strings.jaro_winkler
     | cbrkit.sim.strings.levenshtein
-    | cbrkit.sim.strings.regex
-    # | cbrkit.sim.strings.ngram # tokenizer cannot be handled by pydantic
 )
 
 
