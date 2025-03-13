@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -11,32 +11,33 @@ from cbrkit.model.graph import (
 )
 
 
-@dataclass(frozen=True, slots=True)
-class SchemeData:
-    scheme: arguebuf.Scheme | None
+type NodeData = Mapping[str, Any]
+type GraphData = Mapping[str, Any]
 
 
-type AtomData = str
-type NodeData = AtomData | SchemeData
-type EdgeData = None
-type GraphData = dict[str, Any]
-
-
-def unpack_scheme(node: SchemeData) -> arguebuf.Scheme | None:
-    return node.scheme
-
-
-def load(path: Path) -> Graph[str, NodeData, EdgeData, GraphData]:
+def load(path: Path) -> Graph[str, NodeData, None, GraphData]:
     g = arguebuf.load.file(path)
 
     atom_nodes: dict[str, NodeData] = {
-        key: value.plain_text for key, value in g.atom_nodes.items()
+        key: {
+            "type": "atom",
+            "text": value.plain_text,
+        }
+        for key, value in g.atom_nodes.items()
     }
     scheme_nodes: dict[str, NodeData] = {
-        key: SchemeData(value.scheme) for key, value in g.scheme_nodes.items()
+        key: {
+            "type": "scheme",
+            "text": value.scheme.name if value.scheme is not None else "None",
+        }
+        for key, value in g.scheme_nodes.items()
     }
-    edges: dict[str, SerializedEdge[str, EdgeData]] = {
-        key: SerializedEdge(source=value.source.id, target=value.target.id, value=None)
+    edges: dict[str, SerializedEdge[str, None]] = {
+        key: SerializedEdge(
+            source=value.source.id,
+            target=value.target.id,
+            value=None,
+        )
         for key, value in g.edges.items()
     }
 
@@ -66,7 +67,7 @@ def load(path: Path) -> Graph[str, NodeData, EdgeData, GraphData]:
     )
 
 
-def graph2text(g: Graph[str, NodeData, EdgeData, GraphData]) -> str:
+def graph2text(g: Graph[str, NodeData, None, GraphData]) -> str:
     return g.value["text"]
 
 
@@ -76,36 +77,47 @@ EMBED_FUNC = cbrkit.sim.embed.cache(
     autodump=True,
 )
 SEMANTIC_SIM = cbrkit.sim.embed.build(EMBED_FUNC, cbrkit.sim.embed.cosine())
-SCHEME_SIM = cbrkit.sim.transpose(cbrkit.sim.generic.type_equality(), unpack_scheme)
-NODE_SIM = cbrkit.sim.type_table(
+ATOM_SIM = cbrkit.sim.attribute_value(
     {
-        str: SEMANTIC_SIM,
-        SchemeData: SCHEME_SIM,
+        "text": SEMANTIC_SIM,
+    }
+)
+SCHEME_SIM = cbrkit.sim.attribute_value(
+    {
+        "text": cbrkit.sim.generic.equality(),
+    }
+)
+NODE_SIM = cbrkit.sim.attribute_table(
+    {
+        "atom": ATOM_SIM,
+        "scheme": SCHEME_SIM,
     },
+    attribute="type",
     default=cbrkit.sim.generic.static(0.0),
 )
 
 
 def GRAPH_SIM_FACTORY() -> cbrkit.typing.AnySimFunc[
-    Graph[str, NodeData, EdgeData, GraphData],
+    Graph[str, NodeData, None, GraphData],
     cbrkit.sim.graphs.GraphSim[str],
 ]:
     return cbrkit.sim.graphs.astar.build(
         past_cost_func=cbrkit.sim.graphs.astar.g1(NODE_SIM),
-        future_cost_func=cbrkit.sim.graphs.astar.h3(NODE_SIM),
-        selection_func=cbrkit.sim.graphs.astar.select3(
-            cbrkit.sim.graphs.astar.h3(NODE_SIM)
-        ),
-        init_func=cbrkit.sim.graphs.astar.init2[str, NodeData, EdgeData, GraphData](),
+        future_cost_func=cbrkit.sim.graphs.astar.h2(NODE_SIM),
+        selection_func=cbrkit.sim.graphs.astar.select2(),
+        init_func=cbrkit.sim.graphs.astar.init1(),
         queue_limit=1,
     )
 
 
-GRAPH_MAC = cbrkit.retrieval.build(cbrkit.sim.transpose(SEMANTIC_SIM, graph2text))
+GRAPH_MAC = cbrkit.retrieval.build(
+    cbrkit.sim.transpose(SEMANTIC_SIM, graph2text),
+)
 GRAPH_FAC_PRECOMPUTE = cbrkit.retrieval.build(
     cbrkit.sim.graphs.precompute(
-        cbrkit.sim.type_table(
-            {str: SEMANTIC_SIM},
+        cbrkit.sim.attribute_table(
+            {"atom": ATOM_SIM},
+            attribute="type",
             default=cbrkit.sim.generic.static(0.0),
         )
     )
@@ -116,7 +128,7 @@ GRAPH_FAC = cbrkit.retrieval.build(GRAPH_SIM_FACTORY, multiprocessing=True)
 def Retrievers() -> cbrkit.typing.MaybeFactories[
     cbrkit.typing.RetrieverFunc[
         str,
-        Graph[str, NodeData, EdgeData, GraphData],
+        Graph[str, NodeData, None, GraphData],
         float | cbrkit.sim.graphs.GraphSim[str],
     ]
 ]:

@@ -174,10 +174,7 @@
             build-similarity = mkEval {
               name = "build-similarity";
               combinations = lib.cartesianProduct {
-                domain = [
-                  "cars"
-                  "recipes"
-                ];
+                domain = allDomains;
                 model = largeModels;
               };
               mkCombination = attrs: ''
@@ -190,10 +187,7 @@
             retrieve-builder = mkEval {
               name = "retrieve-builder";
               combinations = lib.cartesianProduct {
-                domain = [
-                  "cars"
-                  "recipes"
-                ];
+                domain = allDomains;
                 model = largeModels;
               };
               mkCombination = attrs: ''
