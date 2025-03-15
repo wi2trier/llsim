@@ -55,7 +55,8 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, CentralitySim]):
         ]
 
         with open(self.file) as fp:
-            responses = [Response.model_validate(entry) for entry in json.load(fp)]
+            obj = json.load(fp)
+            responses = [Response.model_validate(entry) for entry in obj["responses"]]
 
         for res, (casebase, _) in zip(responses, batches, strict=True):
             g, id_map = preferences2graph(res, casebase)

@@ -301,7 +301,8 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, cbrkit.typing.Float]):
 
     def __init__(self, file: str):
         with open(file) as fp:
-            measures: SerializedConfig | AttributeTableConfig = json.load(fp)
+            obj = json.load(fp)
+            measures: SerializedConfig | AttributeTableConfig = obj["response"]
 
         if "table" in measures:
             measures = cast(AttributeTableConfig, measures)

@@ -1,6 +1,8 @@
 import json
 from collections.abc import Callable
 from pathlib import Path
+from timeit import default_timer
+from tracemalloc import start
 from typing import Annotated, Any, cast
 
 import cbrkit
@@ -100,6 +102,7 @@ def build_preferences(
 
     responses = [preferences.Response(preferences=[]) for _ in batches]
     provider = Provider(model)
+    start_time = default_timer()
 
     for _ in range(retries + 1):
         if pairwise:
@@ -113,7 +116,14 @@ def build_preferences(
             responses = preferences.infer_missing(batches, responses)
 
     with open(out, "w") as fp:
-        json.dump([entry.model_dump() for entry in responses], fp, indent=2)
+        json.dump(
+            {
+                "duration": default_timer() - start_time,
+                "responses": [entry.model_dump() for entry in responses],
+            },
+            fp,
+            indent=2,
+        )
 
 
 @app.command()
@@ -137,11 +147,19 @@ def build_similarity(
     out.parent.mkdir(parents=True, exist_ok=True)
 
     _cases = load_cases(_loader, cases, cases_pattern)
+    start_time = default_timer()
 
-    result = builder.build(_cases, attribute, attribute_table, Provider(model))
+    response = builder.build(_cases, attribute, attribute_table, Provider(model))
 
     with out.open("w") as fp:
-        json.dump(result, fp, indent=2)
+        json.dump(
+            {
+                "duration": default_timer() - start_time,
+                "response": response,
+            },
+            fp,
+            indent=2,
+        )
 
 
 @app.command()
