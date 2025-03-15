@@ -31,13 +31,13 @@
             "recipes"
             "arguments"
           ];
-          # 0.3 <= x < 3
+          # 0.4 <= x < 4
           largeModels = [
             "4o" # $2.5/M input tokens, https://openrouter.ai/openai/gpt-4o
             "o3-mini" # $1.1/M input tokens, https://openrouter.ai/openai/o3-mini
-            # "deepseek-v3" # $0.9/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
-            # "deepseek-r1" # $3/M input tokens, https://openrouter.ai/deepseek/deepseek-r1
-            # "llama-405b" # $3/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-405b-instruct
+            "deepseek-v3" # $0.9/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
+            "deepseek-r1" # $3/M input tokens, https://openrouter.ai/deepseek/deepseek-r1
+            "llama-405b" # $3/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-405b-instruct
             # the models below are not used for evaluation
             # "command-r-plus" # $2.375/M input tokens, https://openrouter.ai/cohere/command-r-plus-08-2024
             # "nova-pro" # $0.8/M input tokens, https://openrouter.ai/amazon/nova-pro-v1
@@ -46,10 +46,10 @@
             # "claude-thinking" # $3/M input tokens, https://openrouter.ai/anthropic/claude-3.7-sonnet:thinking
             # "o1" # $15/M input tokens, https://openrouter.ai/openai/o1
           ];
-          # 0.1 <= x < 0.3 (smaller models bad at function calling, larger models too expensive)
+          # 0.1 <= x < 0.2 (smaller models bad at function calling, larger models too expensive)
           mediumModels = [
             "4o-mini" # $0.15/M input tokens, https://openrouter.ai/openai/gpt-4o-mini
-            # "gemini-flash" # $0.1/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-001
+            "gemini-flash" # $0.1/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-001
             # the models below are not used for evaluation
             # "llama-70b" # $0.12/M input tokens, https://openrouter.ai/meta-llama/llama-3.3-70b-instruct
             # "command-r" # $0.1425/M input tokens, https://openrouter.ai/cohere/command-r-08-2024
@@ -59,12 +59,12 @@
             # "qwen-turbo" # $0.05/M input tokens, https://openrouter.ai/qwen/qwen-turbo
             # "nova-lite" # $0.06/M input tokens, https://openrouter.ai/amazon/nova-lite-v1
           ];
-          # 0.01 <= x < 0.03 (larger models too expensive)
+          # 0.01 <= x < 0.02 (larger models too expensive)
           smallModels = [
-            "llama-8b" # $0.02/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-8b-instruct
-            "qwen-7b" # $0.025/M input tokens, https://openrouter.ai/qwen/qwen-2.5-7b-instruct
+            "llama-3b" # $0.015/M input tokens, https://openrouter.ai/meta-llama/llama-3.2-3b-instruct
             # the models below are not used for evaluation
-            # "llama-3b" # $0.015/M input tokens, https://openrouter.ai/meta-llama/llama-3.2-3b-instruct
+            # "llama-8b" # $0.02/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-8b-instruct
+            # "qwen-7b" # $0.025/M input tokens, https://openrouter.ai/qwen/qwen-2.5-7b-instruct
             # "nova-micro" # $0.035/M input tokens, https://openrouter.ai/amazon/nova-micro-v1
             # "gemma-9b" # $0.03/M input tokens, https://openrouter.ai/google/gemma-2-9b-it
             # "command-r7b" # $0.0375/M input tokens, https://openrouter.ai/cohere/command-r7b-12-2024
@@ -153,11 +153,11 @@
                   --domain ${attrs.domain} \
                   --model ${attrs.model} \
                   --pairwise \
-                  --out "data/output/${attrs.domain}/centrality-${attrs.model}-config.json"
+                  --out "data/output/${attrs.domain}/preferences-${attrs.model}-config.json"
               '';
             };
-            retrieve-centrality = mkEval {
-              name = "retrieve-centrality";
+            retrieve-preferences = mkEval {
+              name = "retrieve-preferences";
               combinations = lib.cartesianProduct {
                 domain = allDomains;
                 model = mediumModels ++ smallModels;
@@ -165,10 +165,10 @@
               mkCombination = attrs: ''
                 uv run llsim retrieve "$@" \
                   --domain ${attrs.domain} \
-                  --retriever llsim.centrality:Retriever \
-                  --retriever-arg file="data/output/${attrs.domain}/centrality-${attrs.model}-config.json" \
+                  --retriever llsim.preferences:Retriever \
+                  --retriever-arg file="data/output/${attrs.domain}/preferences-${attrs.model}-config.json" \
                   --retriever-arg measures=pagerank,hits \
-                  --out "data/output/${attrs.domain}/centrality-${attrs.model}.json"
+                  --out "data/output/${attrs.domain}/preferences-${attrs.model}.json"
               '';
             };
             build-similarity = mkEval {
