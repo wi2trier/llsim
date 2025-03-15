@@ -28,7 +28,7 @@ def load(path: Path) -> Graph[str, NodeData, None, GraphData]:
     scheme_nodes: dict[str, NodeData] = {
         key: {
             "type": "scheme",
-            "text": value.scheme.name if value.scheme is not None else "None",
+            "text": type(value.scheme).__name__ if value.scheme is not None else "None",
         }
         for key, value in g.scheme_nodes.items()
     }
