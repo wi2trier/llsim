@@ -22,11 +22,19 @@ class Entry(BaseModel):
 
 
 class SimModel(BaseModel):
-    similarities: list[OnErrorOmit[Entry]]
+    similarities: Annotated[
+        list[OnErrorOmit[Entry]],
+        Field(description="List of similarity scores for each document"),
+    ]
 
 
 class RankModel(BaseModel):
-    ranking: list[OnErrorOmit[str]]
+    ranking: Annotated[
+        list[OnErrorOmit[str]],
+        Field(
+            description="Ranking of all documents by similarity, the first element is the most similar"
+        ),
+    ]
 
 
 def from_sim_model[K](response: SimModel) -> dict[str, float]:

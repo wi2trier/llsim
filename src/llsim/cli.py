@@ -2,7 +2,6 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 from timeit import default_timer
-from tracemalloc import start
 from typing import Annotated, Any, cast
 
 import cbrkit

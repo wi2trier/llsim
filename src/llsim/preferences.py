@@ -2,11 +2,11 @@ import itertools
 import logging
 import random
 from collections.abc import Collection, Sequence
-from typing import override
+from typing import Annotated, override
 
 import cbrkit
 import rustworkx
-from pydantic import BaseModel, OnErrorOmit
+from pydantic import BaseModel, Field, OnErrorOmit
 
 from llsim.provider import Provider
 
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 class Pref(BaseModel):
-    winner: str
-    loser: str
+    winner: Annotated[str, Field(description="ID of the winner document")]
+    loser: Annotated[str, Field(description="ID of the loser document")]
 
     @override
     def __str__(self) -> str:
@@ -25,7 +25,12 @@ class Pref(BaseModel):
 
 
 class Response(BaseModel):
-    preferences: list[OnErrorOmit[Pref]]
+    preferences: Annotated[
+        list[OnErrorOmit[Pref]],
+        Field(
+            description="List of preference objects with the IDs of the winner and the loser of the pairwise comparison"
+        ),
+    ]
 
 
 def combinations2instructions(combinations: list[tuple[str, str]]) -> str:

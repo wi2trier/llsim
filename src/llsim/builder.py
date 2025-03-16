@@ -52,8 +52,11 @@ class ngram:
 
 
 class TaxonomyNode(BaseModel):
-    name: str
-    children: list[OnErrorOmit["TaxonomyNode"]]
+    name: Annotated[str, Field(description="The value of the node")]
+    children: Annotated[
+        list[OnErrorOmit["TaxonomyNode"]],
+        Field(description="The children of the node to build a hierarchical taxonomy"),
+    ]
 
 
 TaxonomyNode.model_rebuild()
@@ -100,12 +103,12 @@ class taxonomy:
 
 
 class TableEntry(BaseModel):
-    source: str
-    target: str
+    source: Annotated[str, Field(description="The value of the source")]
+    target: Annotated[str, Field(description="The value of the target")]
     similarity: Annotated[
         float,
         Field(
-            description="The similarity of the source and target. Must be between 0.0 and 1.0"
+            description="The similarity of the source and target values. Must be between 0.0 and 1.0"
         ),
     ]
 
@@ -115,9 +118,16 @@ class TableEntry(BaseModel):
 
 @dataclass(slots=True)
 class table:
-    entries: list[OnErrorOmit[TableEntry]]
-    symmetric: bool
-    default: float
+    entries: Annotated[
+        list[OnErrorOmit[TableEntry]],
+        Field(description="List of table entries to build a similarity matrix"),
+    ]
+    symmetric: Annotated[
+        bool, Field(description="Whether the table is symmetric or not")
+    ]
+    default: Annotated[
+        float, Field(description="The default similarity value for missing entries")
+    ]
     __doc__ = cbrkit.sim.table.__doc__
     func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
 
