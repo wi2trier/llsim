@@ -31,11 +31,10 @@
             "recipes"
             "arguments"
           ];
-          # 0.4 <= x < 4
+          # 1 <= x < 4
           largeModels = [
-            "4o" # $2.5/M input tokens, https://openrouter.ai/openai/gpt-4o
+            "gpt-4o" # $2.5/M input tokens, https://openrouter.ai/openai/gpt-4o
             "o3-mini" # $1.1/M input tokens, https://openrouter.ai/openai/o3-mini
-            "deepseek-v3" # $0.9/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
             "deepseek-r1" # $3/M input tokens, https://openrouter.ai/deepseek/deepseek-r1
             "llama-405b" # $3/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-405b-instruct
             # the models below are not used for evaluation
@@ -45,10 +44,12 @@
             # "claude" # $3/M input tokens, https://openrouter.ai/anthropic/claude-3.7-sonnet
             # "claude-thinking" # $3/M input tokens, https://openrouter.ai/anthropic/claude-3.7-sonnet:thinking
             # "o1" # $15/M input tokens, https://openrouter.ai/openai/o1
+            # "gpt-4-5" # $75/M input tokens, https://openrouter.ai/openai/gpt-4.5-preview
+            # "deepseek-v3" # $0.9/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
           ];
           # 0.1 <= x < 0.2 (smaller models bad at function calling, larger models too expensive)
           mediumModels = [
-            "4o-mini" # $0.15/M input tokens, https://openrouter.ai/openai/gpt-4o-mini
+            "gpt-4o-mini" # $0.15/M input tokens, https://openrouter.ai/openai/gpt-4o-mini
             "gemini-flash" # $0.1/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-001
             # the models below are not used for evaluation
             # "llama-70b" # $0.12/M input tokens, https://openrouter.ai/meta-llama/llama-3.3-70b-instruct

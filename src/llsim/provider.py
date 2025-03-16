@@ -54,6 +54,11 @@ class Provider[T: BaseModel]:
             response_type=response_type,
             system_message=system_message,
             default_response=default_response,
+            extra_body={
+                "provider": {
+                    "require_parameters": True,
+                },
+            },
         )
         fireworks_provider = partial(
             cbrkit.synthesis.providers.openai,
@@ -95,18 +100,20 @@ class Provider[T: BaseModel]:
                     model="o3-mini-2025-01-31",
                     reasoning_effort="high",
                 )
-            case "4o":
+            case "gpt-4-5":
+                return openai_provider(model="gpt-4.5-preview-2025-02-27")
+            case "gpt-4o":
                 return openai_provider(model="gpt-4o-2024-11-20")
-            case "4o-mini":
+            case "gpt-4o-mini":
                 return openai_provider(model="gpt-4o-mini-2024-07-18")
 
             case "gemini-flash":
+                return openrouter_provider(model="google/gemini-2.0-flash-001")
+            case "gemini-flash-lite":
                 return openrouter_provider(
-                    model="google/gemini-2.0-flash-001",
+                    model="google/gemini-2.0-flash-lite-001",
                     max_completion_tokens=3,
                 )
-            case "gemini-flash-lite":
-                return openrouter_provider(model="google/gemini-2.0-flash-lite-001")
 
             case "llama-405b":
                 return fireworks_provider(model="meta-llama/llama-3.1-405b-instruct")
