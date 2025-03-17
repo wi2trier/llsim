@@ -60,20 +60,6 @@ class Provider[T: BaseModel]:
                 },
             },
         )
-        fireworks_provider = partial(
-            cbrkit.synthesis.providers.openai,
-            client=openrouter_client,
-            response_type=response_type,
-            system_message=system_message,
-            default_response=default_response,
-            extra_body={
-                "provider": {
-                    "order": ["Fireworks"],
-                    "allow_fallbacks": False,
-                    "require_parameters": True,
-                },
-            },
-        )
         instructor_provider = partial(
             cbrkit.synthesis.providers.instructor,
             client=instructor_client,
@@ -116,7 +102,7 @@ class Provider[T: BaseModel]:
                 )
 
             case "llama-405b":
-                return fireworks_provider(model="meta-llama/llama-3.1-405b-instruct")
+                return openrouter_provider(model="meta-llama/llama-3.1-405b-instruct")
             case "llama-70b":
                 return instructor_provider(
                     model="meta-llama/llama-3.3-70b-instruct",
@@ -157,9 +143,9 @@ class Provider[T: BaseModel]:
                 )
 
             case "deepseek-r1":
-                return fireworks_provider(model="deepseek/deepseek-r1")
+                return instructor_provider(model="deepseek/deepseek-r1")
             case "deepseek-v3":
-                return fireworks_provider(model="deepseek/deepseek-chat")
+                return instructor_provider(model="deepseek/deepseek-chat")
 
             case "command-r-7b":
                 return openrouter_provider(
