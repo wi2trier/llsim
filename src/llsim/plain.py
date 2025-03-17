@@ -24,7 +24,10 @@ class Entry(BaseModel):
 class SimModel(BaseModel):
     similarities: Annotated[
         list[OnErrorOmit[Entry]],
-        Field(description="List of similarity scores for each document"),
+        Field(
+            default_factory=list,
+            description="List of similarity scores for each document",
+        ),
     ]
 
 
@@ -32,7 +35,8 @@ class RankModel(BaseModel):
     ranking: Annotated[
         list[OnErrorOmit[str]],
         Field(
-            description="Ranking of all documents by similarity, the first element is the most similar"
+            default_factory=list,
+            description="Ranking of all documents by similarity, the first element is the most similar",
         ),
     ]
 
@@ -120,6 +124,7 @@ class Synthesizer[R: BaseModel, V](cbrkit.typing.SynthesizerFunc[R, str, V, floa
                 "The IDs are given as markdown headings. "
                 "Do not consider IDs found inside markdown code blocks such as node or edge names. "
             ),
+            default_response=self.response_type(),
         )
         prompt_func = cbrkit.synthesis.prompts.default()
         generation_input = [prompt_func(*batch) for batch in batches]
