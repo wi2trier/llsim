@@ -74,6 +74,26 @@ class Provider[T: BaseModel]:
                 },
             },
         )
+        instructor_provider_filtered = partial(
+            instructor_provider,
+            extra_kwargs={
+                "extra_body": {
+                    "provider": {
+                        "require_parameters": True,
+                        # those provide large context sizes for input/output
+                        "order": [
+                            "InferenceNet",
+                            "Lambda",
+                            "Nebius",
+                            "Parasail",
+                            "Friendli",
+                            "Kluster",
+                            "Fireworks",
+                        ],
+                    },
+                },
+            },
+        )
 
         match self.name:
             case "o1":
@@ -102,12 +122,11 @@ class Provider[T: BaseModel]:
                 )
 
             case "llama-405b":
-                return openrouter_provider(model="meta-llama/llama-3.1-405b-instruct")
-            case "llama-70b":
-                return instructor_provider(
-                    model="meta-llama/llama-3.3-70b-instruct",
-                    # system_message=(system_message or "") + "\nRespond with JSON.",
+                return instructor_provider_filtered(
+                    model="meta-llama/llama-3.1-405b-instruct"
                 )
+            case "llama-70b":
+                return instructor_provider(model="meta-llama/llama-3.3-70b-instruct")
             # case "llama-70b":
             #     return openrouter_provider(
             #         model="meta-llama/llama-3.3-70b-instruct",
@@ -143,9 +162,9 @@ class Provider[T: BaseModel]:
                 )
 
             case "deepseek-r1":
-                return instructor_provider(model="deepseek/deepseek-r1")
+                return instructor_provider_filtered(model="deepseek/deepseek-r1")
             case "deepseek-v3":
-                return instructor_provider(model="deepseek/deepseek-chat")
+                return instructor_provider_filtered(model="deepseek/deepseek-chat")
 
             case "command-r-7b":
                 return openrouter_provider(
@@ -153,15 +172,9 @@ class Provider[T: BaseModel]:
                     max_completion_tokens=3,
                 )
             case "command-r":
-                return instructor_provider(
-                    model="cohere/command-r-08-2024",
-                    # system_message=(system_message or "") + "\nRespond with JSON.",
-                )
+                return instructor_provider(model="cohere/command-r-08-2024")
             case "command-r-plus":
-                return instructor_provider(
-                    model="cohere/command-r-plus-08-2024",
-                    # system_message=(system_message or "") + "\nRespond with JSON.",
-                )
+                return instructor_provider(model="cohere/command-r-plus-08-2024")
 
             case "claude-thinking":
                 return openrouter_provider(model="anthropic/claude-3.7-sonnet:thinking")
