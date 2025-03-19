@@ -351,7 +351,7 @@ class GraphSimFactory:
     ]
 
     def __call__(self):
-        node_sim_func = cbrkit.sim.cache(self.node_sim_func())
+        node_sim_func = self.node_sim_func()
         return cbrkit.sim.graphs.astar.build(
             past_cost_func=cbrkit.sim.graphs.astar.g1(node_sim_func),
             future_cost_func=cbrkit.sim.graphs.astar.h3(node_sim_func),
@@ -399,9 +399,7 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, cbrkit.typing.Float]):
             )
 
             retriever_func = cbrkit.retrieval.build(
-                GraphSimFactory(self.sim_func),
-                multiprocessing=True,
-                chunksize=1,
+                GraphSimFactory(self.sim_func), multiprocessing=True
             )
 
             return retriever_func(graph_batches)
