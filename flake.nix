@@ -156,7 +156,7 @@
               mkCombination = attrs: ''
                 uv run llsim retrieve "$@" \
                   --domain ${attrs.domain} \
-                  --retriever llsim.preferences:Retriever \
+                  --retriever llsim.centrality:Retriever \
                   --retriever-arg file="data/output/${attrs.domain}/preferences-${attrs.model}-config.json" \
                   --retriever-arg measures=pagerank,hits \
                   --out "data/output/${attrs.domain}/preferences-${attrs.model}.json"
@@ -219,6 +219,7 @@
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [ uv ];
             UV_PYTHON = lib.getExe pkgs.python312;
+            TOKENIZERS_PARALLELISM = true;
             shellHook = ''
               uv sync --all-extras --locked
             '';
