@@ -34,7 +34,7 @@ centrality_measures: dict[str, CentralityMeasure] = {
         for key, value in rustworkx.in_degree_centrality(g).items()
     },
     # link analysis
-    "pagerank": partial(rustworkx.pagerank, alpha=1.0),
+    "pagerank": partial(rustworkx.pagerank),
     # result is of type tuple[authority_scores, hub_scores], we want authorities
     "hits": lambda g: rustworkx.hits(g)[0],
 }
@@ -50,9 +50,10 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, CentralitySim]):
         batches: Sequence[tuple[cbrkit.typing.Casebase[str, V], V]],
     ) -> Sequence[Mapping[str, CentralitySim]]:
         similarities: list[Mapping[str, CentralitySim]] = []
-        functions = [
-            centrality_measures[measure] for measure in self.measures.split(",")
-        ]
+        functions = {
+            measure: centrality_measures[measure]
+            for measure in self.measures.split(",")
+        }
 
         with open(self.file) as fp:
             obj = json.load(fp)
@@ -61,19 +62,33 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, CentralitySim]):
         for res, (casebase, _) in zip(responses, batches, strict=True):
             g, id_map = preferences2graph(res, casebase)
 
+            casebase_scores: dict[str, list[float]] = {
+                key: [] for key in casebase.keys()
+            }
+
+            for function_name, function in functions.items():
+                try:
+                    scores = function(g)
+
+                    for key in casebase.keys():
+                        casebase_scores[key].append(scores[id_map[key]])
+
+                except rustworkx.FailedToConverge:
+                    logger.warning(f"Failed to converge for {function_name}, skipping")
+                    for key in casebase.keys():
+                        casebase_scores[key].append(0.0)
+
             similarities.append(
                 {
                     key: CentralitySim(
-                        value=statistics.mean(
-                            function(g)[id_map[key]] for function in functions
-                        ),
+                        value=statistics.mean(scores),
                         preferences=[
                             str(entry)
                             for entry in res.preferences
                             if entry.winner == key or entry.loser == key
                         ],
                     )
-                    for key in casebase.keys()
+                    for key, scores in casebase_scores.items()
                 }
             )
 
