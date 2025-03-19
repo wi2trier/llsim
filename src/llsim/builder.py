@@ -27,7 +27,7 @@ type SimFuncGenerator[T] = Callable[
 @dataclass(slots=True)
 class embedding:
     __doc__ = cbrkit.sim.embed.openai.__doc__
-    func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
+    func: cbrkit.typing.BatchSimFunc[str, cbrkit.typing.Float] = field(init=False)
 
     def __post_init__(self):
         self.func = cbrkit.sim.embed.build(
@@ -36,8 +36,8 @@ class embedding:
             ),
         )
 
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)
+    def __call__(self, batches):
+        return self.func(batches)
 
 
 @dataclass(slots=True)
@@ -45,13 +45,13 @@ class ngram:
     n: int
     case_sensitive: bool
     __doc__ = cbrkit.sim.strings.ngram.__doc__
-    func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
+    func: cbrkit.typing.SimFunc[str, cbrkit.typing.Float] = field(init=False)
 
     def __post_init__(self):
         self.func = cbrkit.sim.strings.ngram(self.n, case_sensitive=self.case_sensitive)
 
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)
+    def __call__(self, x, y):
+        return self.func(x, y)
 
 
 class TaxonomyNode(BaseModel):
@@ -88,7 +88,7 @@ class taxonomy:
     )
     distance_function: TaxonomyDistanceFunc
     __doc__ = cbrkit.sim.taxonomy.Taxonomy.__doc__
-    func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
+    func: cbrkit.typing.SimFunc[str, cbrkit.typing.Float] = field(init=False)
 
     def __post_init__(self):
         taxonomy = cbrkit.sim.taxonomy.SerializedTaxonomyNode.model_validate(
@@ -101,8 +101,8 @@ class taxonomy:
             taxonomy_distance_functions[self.distance_function],
         )
 
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)
+    def __call__(self, x, y):
+        return self.func(x, y)
 
 
 class TableEntry(BaseModel):
@@ -132,7 +132,7 @@ class table:
         float, Field(description="The default similarity value for missing entries")
     ]
     __doc__ = cbrkit.sim.table.__doc__
-    func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
+    func: cbrkit.typing.SimFunc[str, cbrkit.typing.Float] = field(init=False)
 
     def __post_init__(self):
         for idx, entry in enumerate(self.entries):
@@ -145,8 +145,8 @@ class table:
             default=self.default,
         )
 
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)
+    def __call__(self, x, y):
+        return self.func(x, y)
 
 
 def measure_lookup[T](
@@ -351,7 +351,8 @@ class GraphSimFactory:
     ]
 
     def __call__(self):
-        node_sim_func = self.node_sim_func()
+        node_sim_func = cbrkit.sim.cache(self.node_sim_func())
+
         return cbrkit.sim.graphs.astar.build(
             past_cost_func=cbrkit.sim.graphs.astar.g1(node_sim_func),
             future_cost_func=cbrkit.sim.graphs.astar.h3(node_sim_func),
