@@ -69,6 +69,7 @@ uv run llsim --help
 
 ## Cost
 
-- `retrieve-plain`: ca. $2 (two retrievers!)
-- `build-preferences-medium`: ca. $2.5
-- `build-similarity`: ca. $0.5
+- `retrieve-naive`: ca. $4 (two variants, two models)
+- `build-preferences-medium`: ca. $5 (two models)
+- `build-preferences-small`: ca. $8 (one model)
+- `build-similarity`: ca. $0.5 (five models)
