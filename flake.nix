@@ -19,24 +19,17 @@
           ...
         }:
         let
-          getPythonName =
-            name:
-            lib.pipe name [
-              (lib.splitString ":")
-              lib.last
-              lib.toLower
-            ];
           allDomains = [
             "cars"
             "recipes"
             "arguments"
           ];
-          # 1 <= x < 4
+          # 0.8 <= x < 4
           largeModels = [
             "gpt-4o" # $2.5/M input tokens, https://openrouter.ai/openai/gpt-4o
             "o3-mini" # $1.1/M input tokens, https://openrouter.ai/openai/o3-mini
-            "deepseek-v3" # $0.4/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
-            "deepseek-r1" # $0.7/M input tokens, https://openrouter.ai/deepseek/deepseek-r1
+            "deepseek-v3" # $1.2/M input tokens, https://openrouter.ai/deepseek/deepseek-chat
+            "deepseek-r1" # $0.8/M input tokens, https://openrouter.ai/deepseek/deepseek-r1
             "llama-405b" # $0.8/M input tokens, https://openrouter.ai/meta-llama/llama-3.1-405b-instruct
             # the models below are not used for evaluation
             # "command-r-plus" # $2.375/M input tokens, https://openrouter.ai/cohere/command-r-plus-08-2024
@@ -112,22 +105,22 @@
                   --out "data/output/${attrs.domain}/baseline.json"
               '';
             };
-            retrieve-plain = mkEval {
-              name = "retrieve-plain";
+            retrieve-naive = mkEval {
+              name = "retrieve-naive";
               combinations = lib.cartesianProduct {
                 domain = allDomains;
-                retriever = [
-                  "llsim.plain:SimRetriever"
-                  "llsim.plain:RankRetriever"
+                variant = [
+                  "Sim"
+                  "Rank"
                 ];
                 model = mediumModels;
               };
               mkCombination = attrs: ''
                 uv run llsim retrieve "$@" \
                   --domain ${attrs.domain} \
-                  --retriever ${attrs.retriever} \
+                  --retriever llsim.naive:${attrs.variant}Retriever \
                   --retriever-arg model=${attrs.model} \
-                  --out "data/output/${attrs.domain}/${getPythonName attrs.retriever}-${attrs.model}.json"
+                  --out "data/output/${attrs.domain}/naive-${lib.toLower attrs.variant}-${attrs.model}.json"
               '';
             };
             build-preferences-medium = mkEval {
