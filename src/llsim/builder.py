@@ -26,14 +26,13 @@ type SimFuncGenerator[T] = Callable[
 
 @dataclass(slots=True)
 class embedding:
-    model: Literal["text-embedding-3-small", "text-embedding-3-large"]
     __doc__ = cbrkit.sim.embed.openai.__doc__
     func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
 
     def __post_init__(self):
         self.func = cbrkit.sim.embed.build(
             cbrkit.sim.embed.cache(
-                cbrkit.sim.embed.openai(self.model),
+                cbrkit.sim.embed.openai("text-embedding-3-small"),
             ),
         )
 
