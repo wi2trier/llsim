@@ -31,7 +31,11 @@ class embedding:
     func: cbrkit.typing.AnySimFunc[str, cbrkit.typing.Float] = field(init=False)
 
     def __post_init__(self):
-        self.func = cbrkit.sim.embed.build(cbrkit.sim.embed.openai(self.model))
+        self.func = cbrkit.sim.embed.build(
+            cbrkit.sim.embed.cache(
+                cbrkit.sim.embed.openai(self.model),
+            ),
+        )
 
     def __call__(self, *args, **kwargs):
         return self.func(*args, **kwargs)
@@ -344,17 +348,18 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, cbrkit.typing.Float]):
                 ],
                 batches,
             )
-            sim_func = cbrkit.sim.graphs.astar.build(
-                past_cost_func=cbrkit.sim.graphs.astar.g1(self.sim_func),
-                future_cost_func=cbrkit.sim.graphs.astar.h3(self.sim_func),
+            node_sim_func = cbrkit.sim.cache(self.sim_func)
+            graph_sim_func = cbrkit.sim.graphs.astar.build(
+                past_cost_func=cbrkit.sim.graphs.astar.g1(node_sim_func),
+                future_cost_func=cbrkit.sim.graphs.astar.h3(node_sim_func),
                 selection_func=cbrkit.sim.graphs.astar.select3(
-                    cbrkit.sim.graphs.astar.h3(self.sim_func)
+                    cbrkit.sim.graphs.astar.h3(node_sim_func)
                 ),
                 init_func=cbrkit.sim.graphs.astar.init2(),
                 queue_limit=1,
             )
             retriever_func = cbrkit.retrieval.build(
-                sim_func, multiprocessing=True, chunksize=1
+                graph_sim_func, multiprocessing=True, chunksize=1
             )
 
             return retriever_func(graph_batches)
@@ -366,13 +371,12 @@ def AttributeValueSim(configs: SerializedConfig):
     number_lookup = measure_lookup(NumberMeasure)
     string_lookup = measure_lookup(StringMeasure)
 
-    attribute_functions: dict[
-        str, cbrkit.typing.AnySimFunc[Any, cbrkit.typing.Float]
-    ] = {
+    functions: dict[str, cbrkit.typing.AnySimFunc[Any, cbrkit.typing.Float]] = {
         name: number_lookup[config["name"]](**config["kwargs"])
         if config["kind"] == "number"
         else string_lookup[config["name"]](**config["kwargs"])
         for name, config in configs.items()
     }
+    cached_funcs = {name: cbrkit.sim.cache(func) for name, func in functions.items()}
 
-    return cbrkit.sim.attribute_value(attribute_functions, default=0.0)
+    return cbrkit.sim.attribute_value(cached_funcs, default=0.0)
