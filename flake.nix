@@ -24,7 +24,6 @@
             "recipes"
             "arguments"
           ];
-          # 0.8 <= x < 4
           largeModels = [
             "gpt-4o" # $2.5/M input tokens, https://openrouter.ai/openai/gpt-4o
             "o3-mini" # $1.1/M input tokens, https://openrouter.ai/openai/o3-mini
@@ -40,12 +39,11 @@
             # "o1" # $15/M input tokens, https://openrouter.ai/openai/o1
             # "gpt-4-5" # $75/M input tokens, https://openrouter.ai/openai/gpt-4.5-preview
           ];
-          # 0.1 <= x < 0.2 (smaller models bad at function calling, larger models too expensive)
           mediumModels = [
             "gpt-4o-mini" # $0.15/M input tokens, https://openrouter.ai/openai/gpt-4o-mini
             "llama-70b" # $0.12/M input tokens, https://openrouter.ai/meta-llama/llama-3.3-70b-instruct
-            # "gemini-flash" # $0.1/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-001
             # the models below are not used for evaluation
+            # "gemini-flash" # $0.1/M input tokens, https://openrouter.ai/google/gemini-2.0-flash-001
             # "command-r" # $0.1425/M input tokens, https://openrouter.ai/cohere/command-r-08-2024
             # "qwen-72b" # $0.13/M input tokens, https://openrouter.ai/qwen/qwen-2.5-72b-instruct
             # "qwen-plus" # $0.4/M input tokens, https://openrouter.ai/qwen/qwen-plus
@@ -53,7 +51,6 @@
             # "qwen-turbo" # $0.05/M input tokens, https://openrouter.ai/qwen/qwen-turbo
             # "nova-lite" # $0.06/M input tokens, https://openrouter.ai/amazon/nova-lite-v1
           ];
-          # 0.01 <= x < 0.02 (larger models too expensive)
           smallModels = [
             "llama-3b" # $0.015/M input tokens, https://openrouter.ai/meta-llama/llama-3.2-3b-instruct
             # the models below are not used for evaluation
