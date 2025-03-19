@@ -9,6 +9,7 @@ from cbrkit.model.graph import (
     SerializedEdge,
     SerializedGraph,
 )
+from frozendict import deepfreeze
 
 type NodeData = Mapping[str, Any]
 type GraphData = Mapping[str, Any]
@@ -62,7 +63,8 @@ def load(path: Path) -> Graph[str, NodeData, None, GraphData]:
                 "text": graph_text,
                 "qrels": qrels,
             },
-        )
+        ),
+        node_converter=deepfreeze,
     )
 
 
