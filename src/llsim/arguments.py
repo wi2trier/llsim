@@ -10,7 +10,6 @@ from cbrkit.model.graph import (
     SerializedGraph,
 )
 
-
 type NodeData = Mapping[str, Any]
 type GraphData = Mapping[str, Any]
 
@@ -103,16 +102,18 @@ def GRAPH_SIM_FACTORY() -> cbrkit.typing.AnySimFunc[
 ]:
     return cbrkit.sim.graphs.astar.build(
         past_cost_func=cbrkit.sim.graphs.astar.g1(NODE_SIM),
-        future_cost_func=cbrkit.sim.graphs.astar.h2(NODE_SIM),
-        selection_func=cbrkit.sim.graphs.astar.select2(),
-        init_func=cbrkit.sim.graphs.astar.init1(),
+        future_cost_func=cbrkit.sim.graphs.astar.h3(NODE_SIM),
+        selection_func=cbrkit.sim.graphs.astar.select3(
+            cbrkit.sim.graphs.astar.h3(NODE_SIM)
+        ),
+        init_func=cbrkit.sim.graphs.astar.init2(),
         queue_limit=1,
     )
 
 
-GRAPH_MAC = cbrkit.retrieval.build(
-    cbrkit.sim.transpose(SEMANTIC_SIM, graph2text),
-)
+# GRAPH_MAC = cbrkit.retrieval.build(
+#     cbrkit.sim.transpose(SEMANTIC_SIM, graph2text),
+# )
 GRAPH_FAC_PRECOMPUTE = cbrkit.retrieval.build(
     cbrkit.sim.graphs.precompute(
         cbrkit.sim.attribute_table(
