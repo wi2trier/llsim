@@ -43,11 +43,12 @@ def combinations2instructions(combinations: list[tuple[str, str]]) -> str:
 
 
 def preferences2graph[V](
-    res: Response, casebase: cbrkit.typing.Casebase[str, V]
+    res: Response, casebase: cbrkit.typing.Casebase[str, V], remove_orphans: bool
 ) -> tuple[rustworkx.PyDiGraph[str, None], dict[str, int]]:
     g: rustworkx.PyDiGraph[str, None] = rustworkx.PyDiGraph()
 
     id_map = {key: g.add_node(key) for key in casebase.keys()}
+    id_map_inv = {v: k for k, v in id_map.items()}
 
     for entry in res.preferences:
         if entry.winner not in id_map:
@@ -57,6 +58,16 @@ def preferences2graph[V](
 
         if (winner := id_map.get(entry.winner)) and (loser := id_map.get(entry.loser)):
             g.add_edge(loser, winner, None)
+
+    if remove_orphans:
+        node_degrees = {
+            node: g.in_degree(node) + g.out_degree(node) for node in g.node_indices()
+        }
+
+        for node, degree in node_degrees.items():
+            if degree == 0:
+                g.remove_node(node)
+                del id_map[id_map_inv[node]]
 
     return g, id_map
 
@@ -268,7 +279,7 @@ def infer_missing[V](
         )
 
         if missing_combinations:
-            g, id_map = preferences2graph(prev_res, casebase)
+            g, id_map = preferences2graph(prev_res, casebase, remove_orphans=False)
             for source, target in missing_combinations:
                 if (source_id := id_map.get(source)) and (
                     target_id := id_map.get(target)

@@ -60,22 +60,21 @@ class Retriever[V](cbrkit.typing.RetrieverFunc[str, V, CentralitySim]):
             responses = [Response.model_validate(entry) for entry in obj["responses"]]
 
         for res, (casebase, _) in zip(responses, batches, strict=True):
-            g, id_map = preferences2graph(res, casebase)
+            g, id_map = preferences2graph(res, casebase, remove_orphans=True)
 
-            casebase_scores: dict[str, list[float]] = {
-                key: [] for key in casebase.keys()
-            }
+            casebase_scores: dict[str, list[float]] = {key: [] for key in id_map.keys()}
 
             for function_name, function in functions.items():
                 try:
                     scores = function(g)
 
-                    for key in casebase.keys():
-                        casebase_scores[key].append(scores[id_map[key]])
+                    for casebase_key, score_key in id_map.items():
+                        casebase_scores[casebase_key].append(scores[score_key])
 
                 except rustworkx.FailedToConverge:
                     logger.warning(f"Failed to converge for {function_name}, skipping")
-                    for key in casebase.keys():
+
+                    for key in id_map.keys():
                         casebase_scores[key].append(0.0)
 
             similarities.append(
