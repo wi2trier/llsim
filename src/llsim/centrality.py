@@ -24,12 +24,12 @@ class CentralitySim(cbrkit.typing.StructuredValue[float]):
 
 centrality_measures: dict[str, CentralityMeasure] = {
     # centrality measures
-    "betweenness_centrality": rustworkx.betweenness_centrality,
-    "closeness_centrality": rustworkx.closeness_centrality,
-    "eigenvector_centrality": rustworkx.eigenvector_centrality,
-    "katz_centrality": rustworkx.katz_centrality,
+    "betweenness": rustworkx.betweenness_centrality,
+    "closeness": rustworkx.closeness_centrality,
+    "eigenvector": rustworkx.eigenvector_centrality,
+    "katz": rustworkx.katz_centrality,
     # in-degree centrality, not normalized between 0 and 1
-    "in_degree_centrality": lambda g: {
+    "indegree": lambda g: {
         key: value / g.num_edges()
         for key, value in rustworkx.in_degree_centrality(g).items()
     },
