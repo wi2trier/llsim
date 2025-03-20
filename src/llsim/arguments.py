@@ -72,11 +72,7 @@ def graph2text(g: Graph[str, NodeData, None, GraphData]) -> str:
     return g.value["text"]
 
 
-EMBED_FUNC = cbrkit.sim.embed.cache(
-    cbrkit.sim.embed.openai("text-embedding-3-small"),
-    "./data/embeddings-cache.npz",
-    autodump=True,
-)
+EMBED_FUNC = cbrkit.sim.embed.cache(cbrkit.sim.embed.openai("text-embedding-3-small"))
 SEMANTIC_SIM = cbrkit.sim.embed.build(EMBED_FUNC, cbrkit.sim.embed.cosine())
 ATOM_SIM = cbrkit.sim.attribute_value(
     {
@@ -135,4 +131,5 @@ def Retrievers() -> cbrkit.typing.MaybeFactories[
         float | cbrkit.sim.graphs.GraphSim[str],
     ]
 ]:
-    return [GRAPH_FAC_PRECOMPUTE, GRAPH_FAC]
+    # return [GRAPH_FAC_PRECOMPUTE, GRAPH_FAC]
+    return [GRAPH_FAC]
