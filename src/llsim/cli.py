@@ -1,3 +1,4 @@
+import itertools
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -248,18 +249,34 @@ def format_float(x: float) -> str:
     return f"{x:.0f}"
 
 
+def format_metric(name: str, qrel: int | None, k: int | None) -> str:
+    if qrel is not None and k is not None:
+        return f"{name}@{k}#{qrel}"
+
+    if qrel is not None:
+        return f"{name}#{qrel}"
+
+    if k is not None:
+        return f"{name}@{k}"
+
+    return name
+
+
 CBRKIT_METRICS = [
     "completeness",
     "correctness",
-    # "ndcg",
+    "ndcg",
 ]
 
 
-def print_metrics(metrics: dict[str, dict[str, float]], max_qrels: list[int | None]):
+def print_metrics(
+    metrics: dict[str, dict[str, float]],
+    max_qrels: list[int | None],
+    ks: list[int | None],
+):
     metric_names = [
-        f"{metric}#{qrel}" if qrel else metric
-        for metric in CBRKIT_METRICS
-        for qrel in max_qrels
+        format_metric(metric, qrel, k)
+        for metric, qrel, k in itertools.product(CBRKIT_METRICS, max_qrels, ks)
     ] + ["duration"]
 
     print("\\begin{tabular}{l" + "c" * len(metric_names) + "}")
@@ -364,7 +381,7 @@ def evaluate_run(
 
         metrics[run_path.stem]["duration"] = duration
 
-    print_metrics(metrics, max_qrels)
+    print_metrics(metrics, max_qrels, ks)
 
 
 @app.command()
@@ -417,7 +434,7 @@ def evaluate_qrels(
 
         metrics[run_path.stem]["duration"] = duration
 
-    print_metrics(metrics, [None])
+    print_metrics(metrics, [None], ks)
 
 
 if __name__ == "__main__":
