@@ -2,10 +2,9 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 from timeit import default_timer
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 import cbrkit
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 from typer import Option, Typer
 
 from llsim import builder, preferences
@@ -238,44 +237,88 @@ def normalize_similarities(
     }
 
 
-def print_metrics(metrics: dict[str, dict[str, float]]):
-    metric_names = sorted(list(metrics.values())[0].keys())
+def format_float(x: float) -> str:
+    if x <= 1:
+        return f"{x:.3f}"
+    elif x <= 10:
+        return f"{x:.2f}"
+    elif x <= 100:
+        return f"{x:.1f}"
 
+    return f"{x:.0f}"
+
+
+def print_metrics(metrics: dict[str, dict[str, float]], max_qrels: list[int | None]):
+    unique_metric_names = [
+        "completeness",
+        "correctness",
+        # "ndcg",
+    ]
+    metric_names = [
+        f"{metric}#{qrel}" if qrel else metric
+        for metric in unique_metric_names
+        for qrel in max_qrels
+    ] + ["duration"]
+    metric_commands = [
+        f"\\{metric}{{{qrel or 'n'}}}"
+        for metric in unique_metric_names
+        for qrel in max_qrels
+    ] + ["\\duration{}"]
+
+    print("\\begin{tabular}{l" + "c" * len(metric_names) + "}")
     print("\\toprule")
-    print("name & " + " & ".join(metric_names) + " \\\\")
+    print("\\experiment{} & " + " & ".join(metric_commands) + " \\\\")
     print("\\midrule")
 
-    for key, values in metrics.items():
-        pretty_value = " & ".join(f"{values[metric]:.3f}" for metric in metric_names)
+    for key, values in sorted(metrics.items(), key=lambda x: x[0]):
+        pretty_value = " & ".join(
+            format_float(values[metric]) for metric in metric_names
+        )
         print(f"{key} & {pretty_value} \\\\")
 
     print("\\bottomrule")
+    print("\\end{tabular}")
 
 
 @app.command()
 def evaluate_run(
     directory: Path,
     k: Annotated[list[int], Option(default_factory=list)],
-    max_qrel: int | None = None,
+    max_qrel: Annotated[list[int], Option(default_factory=list)],
     min_qrel: int = 0,
     baseline_name: str = "baseline.json",
 ):
+    max_qrels = [None] + max_qrel
+    ks = [None] + k
+
     baseline_path = directory / baseline_name
     run_paths = directory.glob("*.json")
-    metric_funcs = cbrkit.eval.generate_metrics(ks=k + [None])
-    error_metric_funcs = {
-        "mse": mean_squared_error,
-        "mae": mean_absolute_error,
-    }
+    metric_funcs = cbrkit.eval.generate_metrics(
+        [
+            "completeness",
+            "correctness",
+            # "ndcg",
+        ],
+        ks=ks,
+    )
+    # error_metric_funcs = {
+    #     "mse": mean_squared_error,
+    #     "mae": mean_absolute_error,
+    # }
     metrics: dict[str, dict[str, float]] = {}
 
     with baseline_path.open("r") as fp:
         baseline = cbrkit.model.Result.model_validate(json.load(fp))
 
-    baseline_qrels = cbrkit.eval.retrieval_step_to_qrels(
-        baseline.final_step, max_qrel, min_qrel
-    )
-    baseline_sims = normalize_similarities(baseline.final_step)
+    baseline_qrels = {
+        max_qrel_entry: cbrkit.eval.retrieval_step_to_qrels(
+            baseline.final_step,
+            max_qrel=max_qrel_entry,
+            min_qrel=min_qrel,
+        )
+        for max_qrel_entry in max_qrels
+    }
+    # baseline_sims = normalize_similarities(baseline.final_step)
 
     for run_path in run_paths:
         if run_path == baseline_path or run_path.stem.endswith("-config"):
@@ -284,27 +327,51 @@ def evaluate_run(
         with run_path.open("r") as fp:
             run = cbrkit.model.Result.model_validate(json.load(fp))
 
-        metrics[run_path.stem] = cbrkit.eval.retrieval_step(
-            baseline_qrels,
-            run.final_step,
-            metrics=metric_funcs,
-        )
+        metrics[run_path.stem] = {}
 
-        try:
-            error_metrics = cbrkit.eval.compute_score_metrics(
-                baseline_sims,
-                normalize_similarities(run.final_step),
-                error_metric_funcs,
-            )
-            metrics[run_path.stem].update(cast(dict[str, float], error_metrics))
-        except ValueError:
-            metrics[run_path.stem].update(
-                {metric: float("nan") for metric in error_metric_funcs.keys()}
+        for qrel, baseline_qrel in baseline_qrels.items():
+            current_metrics = cbrkit.eval.retrieval_step(
+                baseline_qrel,
+                run.final_step,
+                metrics=metric_funcs,
             )
 
-        metrics[run_path.stem]["duration"] = run.final_step.duration
+            if qrel is None:
+                metrics[run_path.stem].update(
+                    {f"{metric}": value for metric, value in current_metrics.items()}
+                )
+            else:
+                metrics[run_path.stem].update(
+                    {
+                        f"{metric}#{qrel}": value
+                        for metric, value in current_metrics.items()
+                    }
+                )
 
-    print_metrics(metrics)
+        # try:
+        #     error_metrics = cbrkit.eval.compute_score_metrics(
+        #         baseline_sims,
+        #         normalize_similarities(run.final_step),
+        #         error_metric_funcs,  # pyright: ignore
+        #     )
+        #     metrics[run_path.stem].update(cast(dict[str, float], error_metrics))
+        # except ValueError:
+        #     metrics[run_path.stem].update(
+        #         {metric: float("nan") for metric in error_metric_funcs.keys()}
+        #     )
+
+        duration = run.final_step.duration
+        run_config_path = directory / f"{run_path.stem}-config.json"
+
+        if run_config_path.exists() and not run_path.stem.startswith("builder-"):
+            with run_config_path.open("r") as fp:
+                run_config = json.load(fp)
+
+            duration += run_config["duration"]
+
+        metrics[run_path.stem]["duration"] = duration
+
+    print_metrics(metrics, max_qrels)
 
 
 @app.command()
@@ -316,6 +383,8 @@ def evaluate_qrels(
     queries: Path | None = None,
     queries_pattern: str | None = None,
 ):
+    ks = [None] + k
+
     if domain is not None:
         loader, _, _, _, queries, queries_pattern = load_domain(domain)
 
@@ -341,11 +410,21 @@ def evaluate_qrels(
         metrics[run_path.stem] = cbrkit.eval.retrieval_step(
             qrels,
             run.final_step,
-            metrics=cbrkit.eval.generate_metrics(ks=k),
+            metrics=cbrkit.eval.generate_metrics(ks=ks),
         )
-        metrics[run_path.stem]["duration"] = run.final_step.duration
 
-    print_metrics(metrics)
+        duration = run.final_step.duration
+        run_config_path = directory / f"{run_path.stem}-config.json"
+
+        if run_config_path.exists() and not run_path.stem.startswith("builder-"):
+            with run_config_path.open("r") as fp:
+                run_config = json.load(fp)
+
+            duration += run_config["duration"]
+
+        metrics[run_path.stem]["duration"] = duration
+
+    print_metrics(metrics, [None])
 
 
 if __name__ == "__main__":
