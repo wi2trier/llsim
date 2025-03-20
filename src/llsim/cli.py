@@ -248,26 +248,23 @@ def format_float(x: float) -> str:
     return f"{x:.0f}"
 
 
+CBRKIT_METRICS = [
+    "completeness",
+    "correctness",
+    # "ndcg",
+]
+
+
 def print_metrics(metrics: dict[str, dict[str, float]], max_qrels: list[int | None]):
-    unique_metric_names = [
-        "completeness",
-        "correctness",
-        # "ndcg",
-    ]
     metric_names = [
         f"{metric}#{qrel}" if qrel else metric
-        for metric in unique_metric_names
+        for metric in CBRKIT_METRICS
         for qrel in max_qrels
     ] + ["duration"]
-    metric_commands = [
-        f"\\{metric}{{{qrel or 'n'}}}"
-        for metric in unique_metric_names
-        for qrel in max_qrels
-    ] + ["\\duration{}"]
 
     print("\\begin{tabular}{l" + "c" * len(metric_names) + "}")
     print("\\toprule")
-    print("\\experiment{} & " + " & ".join(metric_commands) + " \\\\")
+    print("experiment & " + " & ".join(metric_names) + " \\\\")
     print("\\midrule")
 
     for key, values in sorted(metrics.items(), key=lambda x: x[0]):
@@ -294,11 +291,7 @@ def evaluate_run(
     baseline_path = directory / baseline_name
     run_paths = directory.glob("*.json")
     metric_funcs = cbrkit.eval.generate_metrics(
-        [
-            "completeness",
-            "correctness",
-            # "ndcg",
-        ],
+        CBRKIT_METRICS,
         ks=ks,
     )
     # error_metric_funcs = {
@@ -410,7 +403,7 @@ def evaluate_qrels(
         metrics[run_path.stem] = cbrkit.eval.retrieval_step(
             qrels,
             run.final_step,
-            metrics=cbrkit.eval.generate_metrics(ks=ks),
+            metrics=cbrkit.eval.generate_metrics(CBRKIT_METRICS, ks=ks),
         )
 
         duration = run.final_step.duration
