@@ -283,6 +283,7 @@ def build_part(
                 "The response should be based on the presented values and not their keys/ids. "
                 "Make sure to **always** call exactly one of the provided tools. "
             ),
+            retries=10,
         )
 
         requests: list[str] = [

@@ -1,10 +1,10 @@
 import os
 from dataclasses import dataclass
 from functools import partial
-import instructor
 
 import cbrkit
 import httpx
+import instructor
 import ollama
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -40,6 +40,7 @@ class Provider[T: BaseModel]:
         response_type: type[T],
         system_message: str | None = None,
         default_response: T | None = None,
+        retries: int = 0,
     ) -> cbrkit.typing.BatchConversionFunc[str, cbrkit.synthesis.providers.Response[T]]:
         openai_provider = partial(
             cbrkit.synthesis.providers.openai,
@@ -47,6 +48,7 @@ class Provider[T: BaseModel]:
             response_type=response_type,
             system_message=system_message,
             default_response=default_response,
+            retries=retries,
         )
         openrouter_provider = partial(
             cbrkit.synthesis.providers.openai,
@@ -54,6 +56,7 @@ class Provider[T: BaseModel]:
             response_type=response_type,
             system_message=system_message,
             default_response=default_response,
+            retries=retries,
             extra_body={
                 "provider": {
                     "require_parameters": True,
@@ -66,6 +69,7 @@ class Provider[T: BaseModel]:
             response_type=response_type,
             system_message=system_message,
             default_response=default_response,
+            retries=retries,
             extra_kwargs={
                 "extra_body": {
                     "provider": {
