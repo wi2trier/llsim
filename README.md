@@ -66,10 +66,3 @@ The similarity of the cases is calculated by the weighted average of the similar
 ```shell
 uv run llsim --help
 ```
-
-## Cost
-
-- `retrieve-naive`: ca. $4 (two variants, two models)
-- `build-preferences-medium`: ca. $5 (two models)
-- `build-preferences-small`: ca. $8 (one model)
-- `build-similarity`: ca. $0.5 (five models)
