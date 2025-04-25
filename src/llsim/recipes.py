@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -7,8 +8,10 @@ from cbrkit.model.graph import Graph
 from cbrkit.sim.graphs import GraphSim
 from cbrkit.typing import BatchSimFunc
 from frozendict import deepfreeze
+from pydantic import ValidationError
 
 type NodeData = Mapping[str, Any]
+logger = logging.getLogger(__name__)
 
 
 def load(
@@ -20,6 +23,25 @@ def load(
     }
 
 
+try:
+    ACTIVITY_SIM = cbrkit.sim.taxonomy.build(
+        Path("./data/taxonomies/activity.json"),
+        cbrkit.sim.taxonomy.weights("user", "optimistic"),
+    )
+except ValidationError:
+    ACTIVITY_SIM = cbrkit.sim.generic.equality()
+    logger.warning("Failed to load taxonomy for activity. Using equality instead.")
+
+try:
+    INGREDIENT_SIM = cbrkit.sim.taxonomy.build(
+        Path("./data/taxonomies/ingredient.json"),
+        cbrkit.sim.taxonomy.weights("user", "optimistic"),
+    )
+except ValidationError:
+    INGREDIENT_SIM = cbrkit.sim.generic.equality()
+    logger.warning("Failed to load taxonomy for ingredient. Using equality instead.")
+
+
 WORKFLOW_NODE_SIM = cbrkit.sim.attribute_value(
     {
         "name": cbrkit.sim.cache(cbrkit.sim.strings.levenshtein()),
@@ -28,25 +50,11 @@ WORKFLOW_NODE_SIM = cbrkit.sim.attribute_value(
     }
 )
 
-TASK_NODE_SIM = cbrkit.sim.attribute_value(
-    {
-        "name": cbrkit.sim.cache(
-            cbrkit.sim.taxonomy.build(
-                Path("./data/taxonomies/activity.json"),
-                cbrkit.sim.taxonomy.weights("user", "optimistic"),
-            )
-        )
-    }
-)
+TASK_NODE_SIM = cbrkit.sim.attribute_value({"name": cbrkit.sim.cache(ACTIVITY_SIM)})
 
 DATA_NODE_SIM = cbrkit.sim.attribute_value(
     {
-        "name": cbrkit.sim.cache(
-            cbrkit.sim.taxonomy.build(
-                Path("./data/taxonomies/ingredient.json"),
-                cbrkit.sim.taxonomy.weights("user", "optimistic"),
-            )
-        ),
+        "name": cbrkit.sim.cache(INGREDIENT_SIM),
         "amount": cbrkit.sim.cache(
             cbrkit.sim.attribute_value(
                 {
