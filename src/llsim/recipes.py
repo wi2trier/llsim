@@ -72,6 +72,12 @@ NODE_SIM: BatchSimFunc[NodeData, cbrkit.typing.Float] = cbrkit.sim.cache(
         default=cbrkit.sim.generic.static(0.0),
     )
 )
+
+
+def node_matcher(x: Mapping[str, Any], y: Mapping[str, Any]) -> bool:
+    return x["type"] == y["type"]
+
+
 GRAPH_SIM: cbrkit.typing.AnySimFunc[Graph[str, NodeData, None, None], GraphSim[str]] = (
     cbrkit.sim.graphs.astar.build(
         past_cost_func=cbrkit.sim.graphs.astar.g1(NODE_SIM),
@@ -79,8 +85,11 @@ GRAPH_SIM: cbrkit.typing.AnySimFunc[Graph[str, NodeData, None, None], GraphSim[s
         selection_func=cbrkit.sim.graphs.astar.select3(
             cbrkit.sim.graphs.astar.h3(NODE_SIM)
         ),
-        init_func=cbrkit.sim.graphs.astar.init2[str, NodeData, None, None](),
+        init_func=cbrkit.sim.graphs.astar.init2[str, NodeData, None, None](
+            node_matcher=node_matcher
+        ),
         queue_limit=1,
+        node_matcher=node_matcher,
     )
 )
 

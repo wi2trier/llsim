@@ -344,6 +344,9 @@ class AttributeTableSimFactory:
             default=cbrkit.sim.generic.static(0.0),
         )
 
+    def node_matcher(self, x: Mapping[str, Any], y: Mapping[str, Any]) -> bool:
+        return x[self.config["attribute"]] == y[self.config["attribute"]]
+
 
 @dataclass(slots=True, frozen=True)
 class GraphSimFactory:
@@ -353,6 +356,11 @@ class GraphSimFactory:
 
     def __call__(self):
         node_sim_func = cbrkit.sim.cache(self.node_sim_func())
+        node_matcher = (
+            self.node_sim_func.node_matcher
+            if isinstance(self.node_sim_func, AttributeTableSimFactory)
+            else cbrkit.sim.graphs.default_element_matcher
+        )
 
         return cbrkit.sim.graphs.astar.build(
             past_cost_func=cbrkit.sim.graphs.astar.g1(node_sim_func),
@@ -360,8 +368,9 @@ class GraphSimFactory:
             selection_func=cbrkit.sim.graphs.astar.select3(
                 cbrkit.sim.graphs.astar.h3(node_sim_func)
             ),
-            init_func=cbrkit.sim.graphs.astar.init2(),
+            init_func=cbrkit.sim.graphs.astar.init2(node_matcher=node_matcher),
             queue_limit=1,
+            node_matcher=node_matcher,
         )
 
 

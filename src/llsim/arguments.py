@@ -94,6 +94,10 @@ NODE_SIM = cbrkit.sim.attribute_table(
 )
 
 
+def node_matcher(x: Mapping[str, Any], y: Mapping[str, Any]) -> bool:
+    return x["type"] == y["type"]
+
+
 def GRAPH_SIM_FACTORY() -> cbrkit.typing.AnySimFunc[
     Graph[str, NodeData, None, GraphData],
     cbrkit.sim.graphs.GraphSim[str],
@@ -104,8 +108,11 @@ def GRAPH_SIM_FACTORY() -> cbrkit.typing.AnySimFunc[
         selection_func=cbrkit.sim.graphs.astar.select3(
             cbrkit.sim.graphs.astar.h3(NODE_SIM)
         ),
-        init_func=cbrkit.sim.graphs.astar.init2(),
+        init_func=cbrkit.sim.graphs.astar.init2(
+            node_matcher=node_matcher
+        ),
         queue_limit=1,
+        node_matcher=node_matcher,
     )
 
 
