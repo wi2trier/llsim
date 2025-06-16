@@ -77,7 +77,6 @@ NODE_SIM: BatchSimFunc[NodeData, cbrkit.typing.Float] = cbrkit.sim.cache(
             "data": DATA_NODE_SIM,
         },
         attribute="type",
-        default=cbrkit.sim.generic.static(0.0),
     )
 )
 

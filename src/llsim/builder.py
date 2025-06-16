@@ -341,7 +341,6 @@ class AttributeTableSimFactory:
                 for key, value in self.config["table"].items()
             },
             attribute=self.config["attribute"],
-            default=cbrkit.sim.generic.static(0.0),
         )
 
     def node_matcher(self, x: Mapping[str, Any], y: Mapping[str, Any]) -> bool:

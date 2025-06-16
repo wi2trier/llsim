@@ -90,7 +90,6 @@ NODE_SIM = cbrkit.sim.attribute_table(
         "scheme": SCHEME_SIM,
     },
     attribute="type",
-    default=cbrkit.sim.generic.static(0.0),
 )
 
 
