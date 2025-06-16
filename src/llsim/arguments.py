@@ -108,27 +108,11 @@ def GRAPH_SIM_FACTORY() -> cbrkit.typing.AnySimFunc[
     )
 
 
-# GRAPH_MAC = cbrkit.retrieval.build(
-#     cbrkit.sim.transpose(SEMANTIC_SIM, graph2text),
-# )
-GRAPH_FAC_PRECOMPUTE = cbrkit.retrieval.build(
-    cbrkit.sim.graphs.precompute(
-        cbrkit.sim.attribute_table(
-            {"atom": ATOM_SIM},
-            attribute="type",
-            default=cbrkit.sim.generic.static(0.0),
-        )
-    )
-)
-GRAPH_FAC = cbrkit.retrieval.build(GRAPH_SIM_FACTORY, multiprocessing=True)
-
-
-def Retrievers() -> cbrkit.typing.MaybeFactories[
+def Retrievers() -> cbrkit.typing.MaybeFactory[
     cbrkit.typing.RetrieverFunc[
         str,
         Graph[str, NodeData, None, GraphData],
         float | cbrkit.sim.graphs.GraphSim[str],
     ]
 ]:
-    # return [GRAPH_FAC_PRECOMPUTE, GRAPH_FAC]
-    return [GRAPH_FAC]
+    return cbrkit.retrieval.build(GRAPH_SIM_FACTORY, multiprocessing=True)
