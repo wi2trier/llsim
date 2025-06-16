@@ -323,11 +323,8 @@ class AttributeValueSimFactory:
             else string_lookup[config["name"]](**config["kwargs"])
             for name, config in self.config.items()
         }
-        cached_funcs = {
-            name: cbrkit.sim.cache(func) for name, func in functions.items()
-        }
 
-        return cbrkit.sim.attribute_value(cached_funcs, default=0.0)
+        return cbrkit.sim.attribute_value(functions, default=0.0)
 
 
 @dataclass(slots=True, frozen=True)
@@ -358,7 +355,6 @@ class GraphSimFactory:
     ]
 
     def __call__(self):
-        node_sim_func = cbrkit.sim.cache(self.node_sim_func())
         node_matcher = (
             self.node_sim_func.node_matcher
             if isinstance(self.node_sim_func, AttributeTableSimFactory)
@@ -366,7 +362,7 @@ class GraphSimFactory:
         )
 
         return cbrkit.sim.graphs.astar.build(
-            node_sim_func=node_sim_func,
+            node_sim_func=self.node_sim_func(),
             node_matcher=node_matcher,
             beam_width=1,
         )

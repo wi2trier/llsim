@@ -44,24 +44,22 @@ except ValidationError:
 
 WORKFLOW_NODE_SIM = cbrkit.sim.attribute_value(
     {
-        "name": cbrkit.sim.cache(cbrkit.sim.strings.levenshtein()),
+        "name": cbrkit.sim.strings.levenshtein(),
         "preparation time (min)": cbrkit.sim.numbers.linear(1000),
         "calories": cbrkit.sim.numbers.linear(2500),
     }
 )
 
-TASK_NODE_SIM = cbrkit.sim.attribute_value({"name": cbrkit.sim.cache(ACTIVITY_SIM)})
+TASK_NODE_SIM = cbrkit.sim.attribute_value({"name": ACTIVITY_SIM})
 
 DATA_NODE_SIM = cbrkit.sim.attribute_value(
     {
-        "name": cbrkit.sim.cache(INGREDIENT_SIM),
-        "amount": cbrkit.sim.cache(
-            cbrkit.sim.attribute_value(
-                {
-                    "value": cbrkit.sim.numbers.linear(1000),
-                    "unit": cbrkit.sim.generic.equality(),
-                }
-            )
+        "name": INGREDIENT_SIM,
+        "amount": cbrkit.sim.attribute_value(
+            {
+                "value": cbrkit.sim.numbers.linear(1000),
+                "unit": cbrkit.sim.generic.equality(),
+            }
         ),
     },
     aggregator=cbrkit.sim.aggregator(pooling_weights={"name": 2}),
@@ -69,15 +67,13 @@ DATA_NODE_SIM = cbrkit.sim.attribute_value(
     default=0.0,
 )
 
-NODE_SIM: BatchSimFunc[NodeData, cbrkit.typing.Float] = cbrkit.sim.cache(
-    cbrkit.sim.attribute_table(
-        {
-            "workflow": WORKFLOW_NODE_SIM,
-            "task": TASK_NODE_SIM,
-            "data": DATA_NODE_SIM,
-        },
-        attribute="type",
-    )
+NODE_SIM: BatchSimFunc[NodeData, cbrkit.typing.Float] = cbrkit.sim.attribute_table(
+    {
+        "workflow": WORKFLOW_NODE_SIM,
+        "task": TASK_NODE_SIM,
+        "data": DATA_NODE_SIM,
+    },
+    attribute="type",
 )
 
 
