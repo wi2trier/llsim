@@ -88,16 +88,9 @@ def node_matcher(x: Mapping[str, Any], y: Mapping[str, Any]) -> bool:
 
 GRAPH_SIM: cbrkit.typing.AnySimFunc[Graph[str, NodeData, None, None], GraphSim[str]] = (
     cbrkit.sim.graphs.astar.build(
-        past_cost_func=cbrkit.sim.graphs.astar.g1(NODE_SIM),
-        future_cost_func=cbrkit.sim.graphs.astar.h3(NODE_SIM),
-        selection_func=cbrkit.sim.graphs.astar.select3(
-            cbrkit.sim.graphs.astar.h3(NODE_SIM)
-        ),
-        init_func=cbrkit.sim.graphs.astar.init2[str, NodeData, None, None](
-            node_matcher=node_matcher
-        ),
-        queue_limit=1,
+        node_sim_func=NODE_SIM,
         node_matcher=node_matcher,
+        beam_width=1,
     )
 )
 
