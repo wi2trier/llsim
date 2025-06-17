@@ -301,7 +301,7 @@ wheels = [
 
 [[package]]
 name = "cbrkit"
-version = "0.26.4"
+version = "0.26.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "frozendict" },
@@ -317,9 +317,9 @@ dependencies = [
     { name = "scipy" },
     { name = "xmltodict" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/52/4935185e7a91baed16bce156fb24d0ca2f794d6ca38c6bd805d62150bcf3/cbrkit-0.26.4.tar.gz", hash = "sha256:10e9fe5f60c83125c58c8007a8cc213c73b412cea44c27fbfe1fde87d5fa3195", size = 78892, upload-time = "2025-06-16T20:46:27.578Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c4/67/b02c4733e0dc28fed6bbcb5f3c516ffe76cec6488f9fb364c1e8b2fa44e3/cbrkit-0.26.5.tar.gz", hash = "sha256:9eaadc51beb676478e494d2a8fab1f147ca7b78c7bb9e365eb0e24c91584e9cb", size = 79258, upload-time = "2025-06-17T07:15:47.321Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/dd/001781fb79c041ed76650031c33ca0590aa21d5333b67b34a2cd88d83cf8/cbrkit-0.26.4-py3-none-any.whl", hash = "sha256:f3957074ae0ec81590457b586a6defd9815158d4ecc8144585f61dcb91d62190", size = 106615, upload-time = "2025-06-16T20:46:25.751Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/63/2184b60c678a02a8d70a02867f87cc2ed91d316b6c9bb3b6d9abc35b187b/cbrkit-0.26.5-py3-none-any.whl", hash = "sha256:6732012207d667f9650cb58ce3f71eac0eed57110c90cf9e2bdca5671f6ddc7a", size = 106885, upload-time = "2025-06-17T07:15:45.97Z" },
 ]
 
 [package.optional-dependencies]
